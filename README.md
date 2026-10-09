@@ -45,3 +45,7 @@ Deploy `dist/index.html` to any static host.
 
 ## Parked
 An earlier version added a shared code editor, local AI and a game preview. That code (`src/main.js`, `src/index.html`, and friends) is still in the repo but is not built or shown. The app is now one thing: private calls and chat.
+
+## Feedback
+
+"Send feedback" (home screen and More menu) sends one short note to the builders. The sheet shows the exact text before you tap Send. It contains only: worked / didn't work, your note, and, only if you tick the box, the app version, browser string and screen size. It never includes the room link or key, names, chat, files or anything about a call. Your network address is used only to limit spam (a salted hash kept for under an hour) and is not stored with the feedback. Notes are deleted after 60 days. Storage is a free Cloudflare D1 table written by `_worker.js`.
