@@ -1,0 +1,26 @@
+import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
+http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8160);
+const BASE = process.env.URL0 || 'http://localhost:8160/';
+const b = await chromium.launch({ args: ['--no-sandbox'] });
+const c = await b.newContext(); await c.addInitScript(() => document.addEventListener('DOMContentLoaded', () => document.body.classList.add('showadv')));
+await c.route('https://cdn.test/x.js', (r) => r.fulfill({ contentType: 'text/javascript', body: 'window.CDN_OK=1' }));
+await c.route('https://api.test/p', (r) => r.fulfill({ contentType: 'text/plain', headers: { 'access-control-allow-origin': '*' }, body: 'price42' }));
+const p = await c.newPage(); await p.goto(BASE); await p.click('#create'); await p.click('#nocam'); await p.waitForTimeout(1200);
+await p.route; try { await p.routeWebSocket('wss://stream.test/ws', (ws) => { ws.onMessage(() => {}); ws.send('tick1'); }); } catch (e) { console.log('no routeWebSocket'); }
+const page = '<!doctype html><html><head><script src="https://cdn.test/x.js"></script></head><body><div id=o>start</div><script>var o=document.getElementById("o");function s(t){o.textContent+="|"+t;document.title=o.textContent}setTimeout(function(){s("cdn="+(window.CDN_OK||0));fetch("https://api.test/p").then(function(r){return r.text()}).then(function(t){s("fetch="+t)}).catch(function(e){s("fetch=ERR")});try{var w=new WebSocket("wss://stream.test/ws");w.onmessage=function(m){s("ws="+m.data)};w.onerror=function(){s("ws=ERR")}}catch(e){s("ws=EXC")}try{s("parent="+typeof parent.document.body)}catch(e){s("parent=blocked")}try{s("ls="+typeof localStorage.getItem("x"))}catch(e){}},400)<\/script></body></html>';
+await p.evaluate((t) => { const d = window.__pr.doc.getText('code'); d.delete(0, d.length); d.insert(0, t); }, page);
+await p.click('#run'); await p.waitForTimeout(2500);
+const F = p.frameLocator('#frame'); const off = await F.locator('#o').textContent().catch(() => 'none');
+const res = []; const ok = (n, v, x) => { res.push(v); console.log(v ? 'PASS' : 'FAIL', n, x || ''); };
+ok('off: cdn blocked', /cdn=0/.test(off) , off);
+ok('off: blocked button offered', await p.locator('.netbtn').count() > 0);
+ok('off: no internet fetch', !/fetch=price42/.test(off), off);
+await p.click('.netbtn'); await p.waitForTimeout(3000);
+const on = await F.locator('#o').textContent().catch(() => 'none');
+ok('on: cdn script loaded', /cdn=1/.test(on), on);
+ok('on: fetch works', /fetch=price42/.test(on), on);
+ok('on: websocket works', /ws=tick1/.test(on), on);
+ok('on: still cannot reach parent/room', /parent=blocked/.test(on), on);
+ok('warning text shown', /cannot see your room/.test(await p.textContent('#netwarn')));
+ok('checkbox state not in shared doc', !(await p.evaluate(() => JSON.stringify(window.__pr.doc.toJSON()))).includes('"net"'));
+console.log(res.every(Boolean) ? 'NET PASS' : 'NET FAIL'); process.exit(0);
