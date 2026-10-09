@@ -21,7 +21,7 @@ const doc = new Y.Doc();
 const ytext = doc.getText('code');
 const awareness = new Awareness(doc);
 const colors = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f'];
-window.__pr = { doc, conns, stats };
+window.__pr = { doc, conns, stats, Peer };
 
 function status(t) { $('#status').textContent = t; }
 const slotOf = (id) => +id.split('-').pop();
@@ -73,16 +73,32 @@ function addVideo(slot, stream, isLocal) {
 }
 function dropVideo(slot) { const b = videos.get(slot); if (b) { b.remove(); videos.delete(slot); } }
 
+const pending = new Map();
+function tryAnswer(s) {
+  const call = pending.get(s), c = conns.get(s);
+  if (!call || !c || !c.__authed || call.peer !== c.peer) return;
+  pending.delete(s);
+  call.answer(local);
+  call.on('stream', (st) => addVideo(s, st, false));
+}
+
 function onConn(c, outgoing) {
   const s = slotOf(c.peer);
+  if (!c.peer.startsWith(roomId + '-') || !(s >= 0 && s < MAX) || s === me) { c.close(); return; }
   const initiator = () => (outgoing ? me : s);
-  const ready = async () => {
+  c.__authed = false;
+  c.__nonce = crypto.getRandomValues(new Uint8Array(16));
+  // Admission: nothing is shared, no slot is taken and no media flows until the other side
+  // proves it holds the room key by returning our fresh nonce, sealed with that key.
+  const timer = setTimeout(() => { if (!c.__authed) c.close(); }, 8000);
+  const admit = async () => {
+    clearTimeout(timer);
     const ex = conns.get(s);
     if (ex && ex !== c && ex.open) {
       if (ex.__init < initiator()) { c.close(); return; }
       conns.delete(s); ex.close();
     }
-    c.__init = initiator();
+    c.__authed = true; c.__init = initiator();
     conns.set(s, c);
     await send(c, 0, Y.encodeStateAsUpdate(doc));
     await send(c, 1, encodeAwarenessUpdate(awareness, [doc.clientID]));
@@ -90,17 +106,27 @@ function onConn(c, outgoing) {
       const call = peer.call(c.peer, local);
       call.on('stream', (st) => addVideo(s, st, false));
     }
+    tryAnswer(s);
   };
-  c.on('open', ready);
-  if (c.open) ready();
+  const hello = async () => c.send(await seal(2, c.__nonce));
+  c.on('open', hello);
+  if (c.open) hello();
   c.on('data', async (d) => {
     try {
-      const [type, pt] = await open(d); stats.recv++;
+      const [type, pt] = await open(d);
+      if (type === 2) { c.send(await seal(3, pt)); return; }
+      if (type === 3) {
+        if (c.__authed) return;
+        if (pt.length === 16 && pt.every((x, i) => x === c.__nonce[i])) await admit();
+        return;
+      }
+      if (!c.__authed) return;
+      stats.recv++;
       if (type === 0) Y.applyUpdate(doc, pt, 'remote');
       else if (type === 1) applyAwarenessUpdate(awareness, pt, 'remote');
     } catch (e) { console.warn('bad message dropped'); }
   });
-  c.on('close', () => { if (conns.get(s) === c) { conns.delete(s); dropVideo(s); } });
+  c.on('close', () => { clearTimeout(timer); if (conns.get(s) === c) { conns.delete(s); dropVideo(s); } });
 }
 
 function register(slot) {
@@ -118,7 +144,12 @@ function register(slot) {
     for (let j = 0; j < MAX; j++) if (j !== me) onConn(p.connect(roomId + '-' + j, { reliable: true }), true);
   });
   p.on('connection', (c) => onConn(c, false));
-  p.on('call', (call) => { call.answer(local); call.on('stream', (st) => addVideo(slotOf(call.peer), st, false)); });
+  p.on('call', (call) => {
+    const s = slotOf(call.peer);
+    if (!call.peer.startsWith(roomId + '-') || !(s >= 0 && s < MAX)) { call.close(); return; }
+    pending.set(s, call); tryAnswer(s);
+    setTimeout(() => { if (pending.get(s) === call) { pending.delete(s); call.close(); } }, 8000);
+  });
 }
 
 function setupEditor() {
@@ -156,6 +187,7 @@ async function start(useCam) {
   key = location.hash.slice(1);
   roomId = hex(await sha('room:' + key)).slice(0, 24);
   aes = await crypto.subtle.importKey('raw', await sha('enc:' + key), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  window.__pr.roomId = roomId;
   $('#gate').hidden = true; $('#room').hidden = false;
   local = await getStream(useCam);
   setupEditor(); register(0);
