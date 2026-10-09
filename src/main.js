@@ -20,6 +20,8 @@ const stats = { sent: 0, recv: 0 };
 const doc = new Y.Doc();
 const ytext = doc.getText('code');
 const awareness = new Awareness(doc);
+const props = doc.getMap('proposals');
+let view;
 const colors = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f'];
 window.__pr = { doc, conns, stats, Peer };
 
@@ -159,7 +161,7 @@ function setupEditor() {
     broadcast(1, encodeAwarenessUpdate(awareness, [...added, ...updated, ...removed]));
   });
   const undo = new Y.UndoManager(ytext);
-  new EditorView({
+  view = new EditorView({
     state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, html(), yCollab(ytext, awareness, { undoManager: undo })] }),
     parent: $('#editor'),
   });
@@ -176,6 +178,32 @@ function setupPreview() {
   $('#run').onclick = run;
   ytext.observe(() => { if ($('#autorun').checked) { clearTimeout(timer); timer = setTimeout(run, 1000); } });
   window.__pr.runPreview = run;
+}
+
+function setupProposals() {
+  const list = $('#proplist');
+  const render = () => {
+    const all = [...props.values()].sort((x, y) => y.t - x.t);
+    list.innerHTML = '';
+    if (!all.length) { list.innerHTML = '<span class="muted">None yet. Anyone can propose AI code; nothing changes until someone presses Accept.</span>'; return; }
+    for (const p of all.slice(0, 12)) {
+      const d = document.createElement('div'); d.className = 'prop' + (p.status === 'pending' ? '' : ' done');
+      if (p.status !== 'pending') { d.textContent = p.author + "'s suggestion was " + p.status + (p.by ? ' by ' + p.by : '') + '.'; list.appendChild(d); continue; }
+      const hd = document.createElement('div'); hd.textContent = 'Suggestion from ' + p.author; d.appendChild(hd);
+      const pre = document.createElement('pre'); pre.textContent = p.text; d.appendChild(pre);
+      const ok = document.createElement('button'); ok.textContent = 'Accept (insert at my cursor)';
+      const no = document.createElement('button'); no.textContent = 'Reject'; no.className = 'alt';
+      ok.onclick = () => {
+        const cur = props.get(p.id); if (!cur || cur.status !== 'pending') return;
+        if (window.__pr.beforeAccept) window.__pr.beforeAccept('Before accepting ' + p.author + "'s suggestion");
+        const at = Math.min(view.state.selection.main.head, ytext.length);
+        doc.transact(() => { ytext.insert(at, '\n' + p.text + '\n'); props.set(p.id, { ...cur, status: 'accepted', by: 'Guest ' + (me + 1) }); });
+      };
+      no.onclick = () => { const cur = props.get(p.id); if (cur && cur.status === 'pending') props.set(p.id, { ...cur, status: 'rejected', by: 'Guest ' + (me + 1) }); };
+      d.appendChild(ok); d.appendChild(no); list.appendChild(d);
+    }
+  };
+  props.observe(render); render();
 }
 
 function setupAI() {
@@ -207,8 +235,11 @@ function setupAI() {
   };
   $('#aistop').onclick = () => ai && ai.stop();
   $('#aiins').onclick = () => {
-    const mt = /```[a-zA-Z]*\n([\s\S]*?)```/.exec(last); const txt = mt ? mt[1] : last;
-    ytext.insert(ytext.length, '\n' + txt.replace(/\n$/, '') + '\n');
+    const mt = /```[a-zA-Z]*\n([\s\S]*?)```/.exec(last); const txt = (mt ? mt[1] : last).replace(/\n$/, '');
+    if (!txt.trim()) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    props.set(id, { id, author: 'Guest ' + (me + 1), text: txt, status: 'pending', t: Date.now() });
+    $('#aiins').disabled = true; prog('Proposed to the room. Others see it under Suggestions.');
   };
 }
 
@@ -237,7 +268,7 @@ async function start(useCam) {
   window.__pr.roomId = roomId;
   $('#gate').hidden = true; $('#room').hidden = false;
   local = await getStream(useCam);
-  setupEditor(); setupPreview(); setupAI(); register(0);
+  setupEditor(); setupProposals(); setupPreview(); setupAI(); register(0);
   setInterval(refresh, 1000);
 }
 
