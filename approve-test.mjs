@@ -28,8 +28,12 @@ ok('C still not in', await C.isVisible('#wait'));
 const code = async (P) => { await P.click('#more'); await P.click('#verbtn'); await wait(800); const t = await P.textContent('#verbox .code'); await P.click('#verclose'); return t; };
 const ca = await code(A), cb = await code(B); console.log('codes', ca, '|', cb);
 ok('verify codes match', ca === cb && /\S+ \S+ \S+ \S+ \S+/.test(ca));
+ok('address bar has no host secret after joining', !/\.s[\w-]+$/.test(A.url()));
+ok('mode label shows host/approval', (await A.textContent('#mode')).includes('host') && (await B.textContent('#mode')).includes('Approval'));
 // deny
 const D = await mk(invite); await D.click('#nocam'); await wait(8000);
+const kb = await A.locator('.knock').first().boundingBox(); ok('knock banner visible on screen', kb && kb.y >= 0 && kb.y < 120);
+ok('tab title alerts host', (await A.title()).includes('wants to join'));
 for (let i = 0; i < 4; i++) { const n = await A.locator('.knock').count(); if (!n) break; await A.locator('.knock').first().locator('button').nth(1).click(); await wait(400); } await wait(2500);
 ok('denied guest sees ended screen', await D.isVisible('#ended'));
 // non-host cannot burn
@@ -41,4 +45,6 @@ ok('address cleared', (await B.evaluate(() => location.hash)) === '');
 // expiry
 const E = await mk('http://localhost:8172/#abcdefghijklmnop.e1'); await E.click('#nocam'); await wait(800);
 ok('expired link refused', await E.isVisible('#ended'));
+const F = await mk('http://localhost:8172/'); await F.uncheck('#approve'); await F.click('#create'); await F.click('#nocam'); await wait(1500);
+ok('open room labelled', (await F.textContent('#mode')).includes('Open room'));
 console.log(fail ? 'FAILED ' + fail : 'ALL PASS'); await b.close(); srv.close(); process.exit(fail ? 1 : 0);
