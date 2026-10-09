@@ -39,7 +39,7 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-
 #verify,#wait{position:fixed;top:0;left:0;right:0;bottom:0;z-index:30;background:#131A17ee;display:flex;align-items:center;justify-content:center;padding:16px}
 #verify .card,#wait .card{max-width:440px;width:100%;text-align:center}
 .ver{margin:10px 0}.code{font-size:34px;letter-spacing:4px;margin:4px 0}
-#knocks{flex:none}.knock{display:flex;align-items:center;background:var(--card);border:1px solid var(--signal);border-radius:12px;padding:6px 10px;margin:0 0 6px}.knock span{flex:1;font-size:14px}.knock button{margin:0 0 0 6px;min-height:40px}
+#knocks{position:fixed;top:max(8px,env(safe-area-inset-top));left:8px;right:8px;z-index:25}.knock{display:flex;align-items:center;background:#1b2420;border:2px solid var(--signal);border-radius:14px;padding:10px 12px;margin:0 0 6px;box-shadow:0 6px 24px #000c}.knock span{flex:1;font-size:16px;font-weight:600}.knock button{margin:0 0 0 8px;min-height:44px}#mode{flex:none;font-size:12px;color:var(--muted);margin:-4px 2px 0}#mode.on{color:var(--signal)}
 .opts{text-align:left;max-width:320px;margin:0 auto 12px;font-size:14px;color:var(--muted)}.opts label{display:block;margin:6px 0}.opts select{background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px;font-size:15px}
 #chatbtn.ping{outline:2px solid var(--good)}
 #moredet{font-size:13px;color:var(--muted);padding:6px 4px}#audit{line-height:1.6}
@@ -56,9 +56,9 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-
 <p class="by">by arbonomous</p><details class="how"><summary>How is this private?</summary><p>Video, voice, chat and files go straight between the people in the call, encrypted. The call's secret key is the part of the link after the #, which your browser never sends to any server. Anyone with the full link can join, so share it only with people you trust. There is no server that stores anything. A small public introduction server helps browsers find each other; it sees that a connection is being made, not what is said. The encryption has not been independently audited, so do not rely on it for life-or-death secrecy. Open source: github.com/arbonomous/private-room</p></details></div>
 <div id="room" hidden>
 <div class="top"><svg width="30" height="30" aria-hidden="true" style="flex:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M40 20 H28 Q18 20 18 30 V70 Q18 80 28 80 H40 M60 20 H72 Q82 20 82 30 V70 Q82 80 72 80 H60" fill="none" stroke="#B9F27C" stroke-width="10" stroke-linecap="round"/><circle cx="42" cy="50" r="5" fill="#B9F27C"/><circle cx="58" cy="50" r="5" fill="#B9F27C"/></svg><h1 class="appname">mut3d</h1><span id="status"></span><button id="copy" class="alt">Copy invite link</button></div>
+<div id="mode"></div><div id="knocks"></div>
 <div id="main"><div id="videos"></div>
 <div id="chatpanel" hidden><div id="log"></div><form id="sendf"><input id="msg" type="text" placeholder="Type a message" autocomplete="off" maxlength="2000"><button class="alt" type="button" id="attach" title="Send a file (up to 25 MB)">+</button><button>Send</button></form><input id="file" type="file" hidden></div></div>
-<div id="knocks"></div>
 <div class="bar"><button id="mic">Mute</button><button id="camb">Camera off</button><button id="chatbtn" class="alt">Chat</button><button id="more" class="alt">More</button><button id="leave" class="off">Leave</button></div>
 </div>
 <div id="sheet" hidden><button id="verbtn" class="alt">Verify this call</button><button id="share" class="alt">Share screen</button><button id="burn" class="off">End room for everyone</button><details id="moredet"><summary>Privacy check</summary><div id="audit"></div></details></div>
