@@ -18,6 +18,11 @@ await setDoc(`<h1>cdn game</h1><script src="https://cdn.jsdelivr.net/npm/phaser@
 await setDoc(`function (`); r = await run(); check('syntax error is shown', /Error in your code/.test(r.log), r.log.slice(0, 120));
 await setDoc(`undefinedFunction();`); r = await run(); check('runtime error is shown', /Error in your code/.test(r.log), r.log.slice(0, 120));
 await setDoc(``); r = await run(); check('empty editor message', /Nothing to run/.test(r.log));
+await setDoc(`<canvas id="c"></canvas><script>\nimport Phaser from 'https://cdn.jsdelivr.net/npm/phaser@3/+esm';\nnew Phaser.Game({});\n<\/script>`); r = await run(); check('ES import shows plain-words explanation + button', /imports a library/.test(r.log) && (await p.locator('#pvlog button:has-text("Ask AI to remove imports")').count()) === 1, r.log.slice(0, 160));
+await p.click('#pvlog button:has-text("Ask AI to remove imports")'); await p.waitForTimeout(400); check('button fills the AI question', /NO import statements/.test(await p.inputValue('#aiq')));
+await setDoc(`<body><script>\nconst score = 0;\nfunction hit(){ score = score + 1; }\nhit();\n<\/script></body>`); r = await run(); check('const reassign error shows fix button', /Assignment to constant/.test(r.log) && (await p.locator('#pvlog button:has-text("Ask AI to fix this error")').count()) === 1, r.log.slice(0, 160));
+await p.click('#pvlog button:has-text("Ask AI to fix this error")'); await p.waitForTimeout(400); const q = await p.inputValue('#aiq'); check('fix button fills question with error+line+let hint', /Assignment to constant/.test(q) && /score = score \+ 1/.test(q) && /let \(not const\)/.test(q), q.replace(/\n/g,' | ').slice(0, 400));
+await p.evaluate(() => { window.__pr.autoPropose = false; });
 // AI reply paths: 3 separate blocks, and a truncated reply
 const propose = async (reply) => { await p.evaluate((x) => { window.__reply = x; }, reply); await p.click('#aiload'); await p.waitForTimeout(300); await p.fill('#aiq', 'q'); await p.click('#aiask'); await p.waitForTimeout(300); await p.click('#aiins'); await p.waitForTimeout(300); };
 await setDoc('');
