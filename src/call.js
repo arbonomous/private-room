@@ -133,8 +133,8 @@ function tryPlay(v, box) {
   const p = v.play();
   if (p && p.catch) p.catch(() => {
     // Browser blocked sound or autoplay. Retry muted so the picture at least shows, and offer a tap to start sound.
-    if (!v.muted) { v.muted = true; v.play().then(() => { ov.textContent = 'Tap for sound'; ov.hidden = false; }).catch(() => { ov.textContent = 'Tap to start video'; ov.hidden = false; }); }
-    else { ov.textContent = 'Tap to start video'; ov.hidden = false; }
+    if (!v.muted) { v.muted = true; v.play().then(() => { ov.textContent = 'Tap for sound'; ov.classList.remove('big'); ov.hidden = false; }).catch(() => { ov.textContent = 'Tap to start video'; ov.classList.add('big'); ov.hidden = false; }); }
+    else { ov.textContent = 'Tap to start video'; ov.classList.add('big'); ov.hidden = false; }
   });
 }
 function addVideo(slot, stream, isLocal) {
@@ -501,7 +501,9 @@ async function start(useCam) {
   $('#burn').hidden = approvalMode && !isHost;
   $('#waitleave').onclick = leave; $('#again').onclick = () => { location.href = location.pathname; };
   $('#leave').onclick = leave;
-  $('#chatbtn').onclick = () => { const p = $('#chatpanel'); p.hidden = !p.hidden; $('#chatbtn').classList.remove('ping'); if (!p.hidden) $('#msg').focus(); };
+  $('#chatbtn').onclick = () => { const p = $('#chatpanel'); p.hidden = !p.hidden; $('#main').classList.toggle('chat', !p.hidden); $('#chatbtn').classList.remove('ping'); if (!p.hidden) { $('#log').scrollTop = 1e9; } };
+  // Keep the whole call screen inside the visible area when the phone keyboard opens, so the message box and buttons stay reachable.
+  if (window.visualViewport) { const vv = window.visualViewport; const fit = () => { const r = $('#room'); r.style.height = vv.height + 'px'; r.style.top = vv.offsetTop + 'px'; }; vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit(); }
   $('#sendf').onsubmit = (e) => { e.preventDefault(); const t = $('#msg').value.trim(); if (!t) return; addMsg('You', t, true, me); broadcast(0, json({ t })); $('#msg').value = ''; };
   $('#file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) sendFile(f); };
   $('#attach').onclick = () => $('#file').click();
