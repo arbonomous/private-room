@@ -1,0 +1,18 @@
+mut3d brand concepts - private draft, October 9, 2026
+
+Recommendation: 1 / Quiet room. Two inward-facing doorframes and two points suggest a shared room without implying a certified security guarantee. No mic, padlock or shield. The room is the product, not the mute button.
+
+2 / Direct line emphasizes the connection. 3 / Cipher 3 makes the numeral the signature. All three are proposed, not selected.
+
+Positioning is a design target, not verification of implementation. Use Link-only calls and chat as the neutral descriptor until shipping details are confirmed. Mention free and account-free only when they are true in the shipped experience. Encryption claims need engineering verification; the crypto is unaudited. No claims of anonymity, zero logs, permanence or guaranteed secrecy.
+
+Palette 1: Forest #131A17 / Signal #B9F27C / Chalk #F5F8F2.
+Palette 2: Midnight #101922 / Air #77C8F8 / Mist #F1F7FB.
+Palette 3: Plum #1B1624 / Lilac #C5A9FF / Paper #F8F4FF.
+Accent is for brand highlights and chosen actions, not text on white. Use dark text on accent buttons. Success and microphone states must be labeled independently of brand color.
+
+Typography: system sans stack -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; 600 titles, 400 body. System mono for room codes only. Outlined wordmarks use DejaVu Sans Bold (1,2) / DejaVu Sans Mono Bold (3); source font license included.
+
+Use one icon-width clear space around each lockup. Mark minimum: 24px, recommended app-icon display: 32px and above. Use an icon instead of a lockup below 120px width. Do not stretch, rotate, apply gradients/glows or add mic-slash graphics. Light/dark SVG lockups and standalone marks included. SVG artwork is authoritative; raster boards are presentation previews.
+
+All artwork is original geometry drawn for this brief. This is not a trademark clearance or similarity audit. No domains, accounts or repositories changed. Nothing posted or hosted.
