@@ -1,43 +1,50 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>mut3d</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20100%20100%22%3E%3Crect%20width=%22100%22%20height=%22100%22%20rx=%2224%22%20fill=%22%23131A17%22/%3E%3Cg%20transform=%22translate%288%208%29%20scale%28.84%29%22%3E%3Cpath%20d=%22M40%2020%20H28%20Q18%2020%2018%2030%20V70%20Q18%2080%2028%2080%20H40%20M60%2020%20H72%20Q82%2020%2082%2030%20V70%20Q82%2080%2072%2080%20H60%22%20fill=%22none%22%20stroke=%22%23B9F27C%22%20stroke-width=%2210%22%20stroke-linecap=%22round%22/%3E%3Ccircle%20cx=%2242%22%20cy=%2250%22%20r=%225%22%20fill=%22%23B9F27C%22/%3E%3Ccircle%20cx=%2258%22%20cy=%2250%22%20r=%225%22%20fill=%22%23B9F27C%22/%3E%3C/g%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20100%20100%22%3E%3Crect%20width=%22100%22%20height=%22100%22%20rx=%2224%22%20fill=%22%23131A17%22/%3E%3Cg%20transform=%22translate%288%208%29%20scale%28.84%29%22%3E%3Cpath%20d=%22M40%2020%20H28%20Q18%2020%2018%2030%20V70%20Q18%2080%2028%2080%20H40%20M60%2020%20H72%20Q82%2020%2082%2030%20V70%20Q82%2080%2072%2080%20H60%22%20fill=%22none%22%20stroke=%22%23B9F27C%22%20stroke-width=%2210%22%20stroke-linecap=%22round%22/%3E%3Ccircle%20cx=%2242%22%20cy=%2250%22%20r=%225%22%20fill=%22%23B9F27C%22/%3E%3Ccircle%20cx=%2258%22%20cy=%2250%22%20r=%225%22%20fill=%22%23B9F27C%22/%3E%3C/g%3E%3C/svg%3E">
+<meta name="theme-color" content="#131A17">
 <meta name="description" content="Link-only encrypted video calls and chat. No account, no phone number, no app, nothing stored.">
 <style>
 *{box-sizing:border-box}
-:root{--bg:#0f1319;--card:#171d26;--line:#262f3b;--text:#e8ebf0;--muted:#98a3b0;--accent:#4f9cf0;--good:#6fcf97;--bad:#e5534b}
-html,body{height:100%;overflow-x:hidden}
+:root{--bg:#131A17;--card:#1b2420;--line:#2b3731;--text:#F5F8F2;--muted:#9fb0a6;--accent:#2f6f4f;--signal:#B9F27C;--good:#B9F27C;--bad:#c4473f}
+html,body{height:100%;overflow-x:hidden;-webkit-text-size-adjust:100%}
 body{margin:0;font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
 p{color:var(--muted);margin:4px 0 12px}
 button{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:11px 16px;font-size:15px;font-weight:600;margin:4px 4px 4px 0;cursor:pointer;-webkit-appearance:none}
 button.alt{background:#2a3441;font-weight:500}button.off{background:var(--bad)}button.big{padding:14px 28px;font-size:17px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px}
-.hero{max-width:540px;margin:8vh auto;text-align:center}.hero h1{font-size:34px;margin:0 0 6px}.hero p{font-size:17px}
+.hero{max-width:540px;margin:8vh auto;text-align:center}.hero h1{font-size:34px;margin:0 0 2px;color:var(--signal)}.tag{font-size:18px;color:var(--text)!important;margin:0 0 10px}.by{font-size:12px;margin:14px 0 0}.hero p{font-size:17px}
 input[type=text]{background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:12px;font:16px system-ui;width:100%;max-width:300px;margin:6px 0 10px}
 details.how{margin-top:22px;text-align:left;color:var(--muted);font-size:14px}details.how summary{cursor:pointer;text-align:center}
-#room{display:flex;flex-direction:column;height:100vh;height:100dvh;padding:8px;gap:8px}
-.top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.top h1{font-size:18px;margin:0;flex:1}#status{color:var(--good);font-size:13px}
-#main{flex:1;min-height:0;display:flex;gap:8px}
-#videos{flex:1;min-width:0;display:grid;gap:8px;grid-template-columns:1fr;grid-auto-rows:1fr}
+#room{position:fixed;inset:0;display:flex;flex-direction:column;padding:8px 8px 0;gap:8px;padding-top:max(8px,env(safe-area-inset-top));padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right));overflow:hidden}
+#room[hidden]{display:none}
+.top{display:flex;align-items:center;gap:8px;flex:none}.top h1{font-size:18px;margin:0;flex:1;color:var(--signal)}#status{color:var(--good);font-size:13px}
+.top button{padding:8px 12px;min-height:44px}
+#main{flex:1 1 0;min-height:0;display:flex;gap:8px;position:relative}
+#videos{flex:1 1 0;min-width:0;min-height:0;display:grid;gap:8px;grid-template-columns:1fr;grid-template-rows:repeat(auto-fit,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);overflow:hidden}
 #videos[data-n="2"],#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}
 figure{margin:0;position:relative;min-height:0;min-width:0;background:#000;border-radius:14px;overflow:hidden}
-figure video{width:100%;height:100%;object-fit:cover;border:3px solid var(--line);border-radius:14px;display:block;background:#000}
+figure video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border:3px solid var(--line);border-radius:14px;background:#000;pointer-events:none}
 figure.off video{opacity:.15}
-figcaption{position:absolute;left:8px;bottom:8px;background:#000a;border-radius:8px;padding:2px 8px;font-size:13px}
-#chatpanel{width:300px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:0}
+figcaption{position:absolute;left:8px;bottom:8px;background:#000a;border-radius:8px;padding:2px 8px;font-size:13px;pointer-events:none}
+#chatpanel{width:320px;flex:none;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:0}
 #chatpanel[hidden]{display:none}
-#log{flex:1;overflow:auto;font-size:14px;word-break:break-word}.msg{margin:4px 0}.msg.mine{opacity:.9}.sys{color:var(--muted);font-size:12px;margin:4px 0;text-align:center}.msg a{color:var(--accent);font-weight:600}
-#sendf{display:flex;gap:4px}#sendf input{flex:1;min-width:0;margin:0;max-width:none;padding:9px}#sendf button{margin:0;padding:9px 12px}
-.bar{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}.bar button{margin:0}
+#log{flex:1;min-height:0;overflow:auto;font-size:15px;word-break:break-word;-webkit-overflow-scrolling:touch}.msg{margin:4px 0}.sys{color:var(--muted);font-size:12px;margin:4px 0;text-align:center}.msg a{color:var(--accent);font-weight:600}
+#sendf{display:flex;gap:4px;flex:none}#sendf input{flex:1;min-width:0;margin:0;max-width:none;padding:10px;font-size:16px}#sendf button{margin:0;padding:10px 14px;min-height:44px}
+.bar{flex:none;display:flex;gap:6px;justify-content:center;padding:6px 0 max(8px,env(safe-area-inset-bottom));position:relative;z-index:5;background:var(--bg)}
+.bar button{margin:0;flex:1 1 0;max-width:120px;min-height:48px;padding:6px 4px;font-size:14px;touch-action:manipulation}
 #chatbtn.ping{outline:2px solid var(--good)}
-details#more{font-size:13px;color:var(--muted)}#audit{line-height:1.6}
-@media(max-width:720px){#main{flex-direction:column}#chatpanel{width:100%;height:38%}#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}#videos[data-n="2"]{grid-template-columns:1fr;grid-auto-rows:minmax(0,1fr)}.top h1{display:none}}
+details#more{flex:none;font-size:13px;color:var(--muted)}#audit{line-height:1.6}
+@media(max-width:720px){#chatpanel{position:absolute;left:0;right:0;bottom:0;width:auto;height:55%;z-index:4;box-shadow:0 -8px 24px #000a}#share{display:none}.top h1{font-size:16px}#more{display:none}}
+@media(max-width:720px) and (orientation:portrait){#videos[data-n="2"]{grid-template-columns:1fr}#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}}
 </style></head>
 <body>
-<div id="gate" class="hero card"><h1 class="appname">mut3d</h1><p>Private video calls and chat for up to 4 people. No account, no phone number, no app. Nothing is stored.</p>
+<div id="gate" class="hero card"><svg width="84" height="84" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M40 20 H28 Q18 20 18 30 V70 Q18 80 28 80 H40 M60 20 H72 Q82 20 82 30 V70 Q82 80 72 80 H60" fill="none" stroke="#B9F27C" stroke-width="10" stroke-linecap="round"/><circle cx="42" cy="50" r="5" fill="#B9F27C"/><circle cx="58" cy="50" r="5" fill="#B9F27C"/></svg><h1 class="appname">mut3d</h1><p class="tag">Link-only calls and chat.</p><p>Private video calls and chat for up to 4 people. No account, no phone number, no app. Nothing is stored.</p>
 <input id="name" type="text" maxlength="24" placeholder="Your name (optional)" autocomplete="off"><br>
 <button id="create" class="big">Start a call</button>
 <div id="join" hidden><p>You were invited. Ready?</p><button id="cam" class="big">Join with camera and mic</button><br><button id="nocam" class="alt">Join without camera</button></div>
-<details class="how"><summary>How is this private?</summary><p>Video, voice, chat and files go straight between the people in the call, encrypted. The call's secret key is the part of the link after the #, which your browser never sends to any server. Anyone with the full link can join, so share it only with people you trust. There is no server that stores anything. A small public introduction server helps browsers find each other; it sees that a connection is being made, not what is said. The encryption has not been independently audited, so do not rely on it for life-or-death secrecy. Open source: github.com/arbonomous/private-room</p></details></div>
+<p class="by">by arbonomous</p><details class="how"><summary>How is this private?</summary><p>Video, voice, chat and files go straight between the people in the call, encrypted. The call's secret key is the part of the link after the #, which your browser never sends to any server. Anyone with the full link can join, so share it only with people you trust. There is no server that stores anything. A small public introduction server helps browsers find each other; it sees that a connection is being made, not what is said. The encryption has not been independently audited, so do not rely on it for life-or-death secrecy. Open source: github.com/arbonomous/private-room</p></details></div>
 <div id="room" hidden>
-<div class="top"><h1 class="appname">mut3d</h1><span id="status"></span><button id="copy" class="alt">Copy invite link</button></div>
+<div class="top"><svg width="30" height="30" aria-hidden="true" style="flex:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M40 20 H28 Q18 20 18 30 V70 Q18 80 28 80 H40 M60 20 H72 Q82 20 82 30 V70 Q82 80 72 80 H60" fill="none" stroke="#B9F27C" stroke-width="10" stroke-linecap="round"/><circle cx="42" cy="50" r="5" fill="#B9F27C"/><circle cx="58" cy="50" r="5" fill="#B9F27C"/></svg><h1 class="appname">mut3d</h1><span id="status"></span><button id="copy" class="alt">Copy invite link</button></div>
 <div id="main"><div id="videos"></div>
 <div id="chatpanel" hidden><div id="log"></div><form id="sendf"><input id="msg" type="text" placeholder="Type a message" autocomplete="off" maxlength="2000"><button class="alt" type="button" id="attach" title="Send a file (up to 25 MB)">+</button><button>Send</button></form><input id="file" type="file" hidden></div></div>
 <div class="bar"><button id="mic">Mute</button><button id="camb">Camera off</button><button id="share" class="alt">Share screen</button><button id="chatbtn" class="alt">Chat</button><button id="leave" class="off">Leave</button></div>
