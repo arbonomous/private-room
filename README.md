@@ -49,3 +49,7 @@ An earlier version added a shared code editor, local AI and a game preview. That
 ## Feedback
 
 "Send feedback" (home screen and More menu) sends one short note to the builders. The sheet shows the exact text before you tap Send. It contains only: worked / didn't work, your note, and, only if you tick the box, the app version, browser string and screen size. It never includes the room link or key, names, chat, files or anything about a call. Your network address is used only to limit spam (a salted hash kept for under an hour) and is not stored with the feedback. Notes are deleted after 60 days. Storage is a free Cloudflare D1 table written by `_worker.js`.
+
+## Voice disguise
+
+More menu > Voice disguise: Off (default), Deeper, Higher, Robot. It runs in your own browser on your microphone before the audio is sent, so the others hear the changed voice. It is a disguise, not anonymity: people can still recognise you by what you say and how you talk. "Hear myself" is off by default (use headphones, or you get echo). If the browser blocks audio processing, the call carries on with your normal voice. Effects use some battery on phones.
