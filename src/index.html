@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>private-room</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:#12161c;color:#e6e9ee}
+main{max-width:1100px;margin:0 auto;padding:16px}h1{font-size:20px;margin:0 0 4px}p{color:#9aa5b1;margin:4px 0 12px}
+button{background:#3d85c6;color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:15px;margin:4px 6px 4px 0;cursor:pointer}button.alt{background:#2b3440}
+#videos{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}figure{margin:0;width:200px}video{width:200px;height:150px;background:#000;border-radius:8px;object-fit:cover}figcaption{font-size:12px;color:#9aa5b1}
+#editor{border:1px solid #2b3440;border-radius:8px;overflow:hidden;background:#fff;color:#111;min-height:260px}.cm-editor{min-height:260px}
+#audit{margin-top:12px;padding:12px;border:1px solid #2b3440;border-radius:8px;font-size:13px;line-height:1.6;color:#c5ced8}#status{color:#81b29a;margin:8px 0}
+</style></head><body><main>
+<h1>private-room</h1>
+<div id="gate"><p>Video, voice and a shared code editor. Everything goes straight between your browsers and is encrypted. The room key stays in the link after the #, so no server ever gets it.</p>
+<button id="create">Create a room</button><div id="join" hidden><p>You have a room link. Join it:</p><button id="cam">Join with camera</button><button id="nocam" class="alt">Join without camera</button></div></div>
+<div id="room" hidden><button id="copy" class="alt">Copy invite link</button><span id="status"></span><div id="videos"></div><div id="editor"></div><div id="audit"></div></div>
+</main><script>/*AUDIT*/</script><script>/*BUNDLE*/</script></body></html>
