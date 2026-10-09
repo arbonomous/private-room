@@ -35,7 +35,7 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-
 .bar button{margin:0 3px;flex:1 1 0;max-width:120px;min-height:48px;padding:6px 4px;font-size:14px;touch-action:manipulation}
 #sheet{position:fixed;left:8px;right:8px;bottom:calc(68px + env(safe-area-inset-bottom));z-index:20;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px 12px;box-shadow:0 -8px 24px #000a}
 #fb[hidden],#sheet[hidden],#verify[hidden],#wait[hidden],#ended[hidden]{display:none}
-#sheet>button[hidden]{display:none}#sheet>button{display:block;width:100%;margin:6px 0;min-height:48px}
+#sheet .vc{margin:6px 0;font-size:14px}#sheet .vc select{font-size:16px;margin-left:6px}#sheet>button[hidden]{display:none}#sheet>button{display:block;width:100%;margin:6px 0;min-height:48px}
 #fb{position:fixed;top:0;left:0;right:0;bottom:0;z-index:40;background:#131A17f2;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
 #verify,#wait{position:fixed;top:0;left:0;right:0;bottom:0;z-index:30;background:#131A17ee;display:flex;align-items:center;justify-content:center;padding:16px}
 #verify .card,#wait .card{max-width:440px;width:100%;text-align:center}
@@ -62,7 +62,7 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-
 <div id="chatpanel" hidden><div id="log"></div><form id="sendf"><input id="msg" type="text" placeholder="Type a message" autocomplete="off" maxlength="2000"><button class="alt" type="button" id="attach" title="Send a file (up to 25 MB)">+</button><button>Send</button></form><input id="file" type="file" hidden></div></div>
 <div class="bar"><button id="mic">Mute</button><button id="camb">Camera off</button><button id="chatbtn" class="alt">Chat</button><button id="more" class="alt">More</button><button id="leave" class="off">Leave</button></div>
 </div>
-<div id="sheet" hidden><button id="verbtn" class="alt">Verify this call</button><button id="share" class="alt">Share screen</button><button id="fbmore" class="alt">Send feedback</button><button id="burn" class="off">End room for everyone</button><details id="moredet"><summary>Privacy check</summary><div id="audit"></div></details></div>
+<div id="sheet" hidden><button id="verbtn" class="alt">Verify this call</button><button id="share" class="alt">Share screen</button><div class="vc"><label>Voice disguise <select id="voice"><option value="off">Off</option><option value="deeper">Deeper</option><option value="higher">Higher</option><option value="robot">Robot</option></select></label><label style="display:block"><input type="checkbox" id="hear"> Hear myself (use headphones)</label><small>Changes how you sound to others. It is a disguise, not anonymity.</small></div><button id="fbmore" class="alt">Send feedback</button><button id="burn" class="off">End room for everyone</button><details id="moredet"><summary>Privacy check</summary><div id="audit"></div></details></div>
 <div id="fb" hidden><div class="card"><h2>Send feedback</h2><p>Goes straight to the builders. Nothing else is attached.</p>
 <div class="opts"><label><input type="radio" name="fbw" value="yes"> It worked</label><label><input type="radio" name="fbw" value="no"> It didn't work</label></div>
 <textarea id="fbtext" maxlength="1500" rows="4" placeholder="What happened? What should be better?" style="width:100%"></textarea>
