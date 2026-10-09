@@ -266,6 +266,8 @@ function setupProposals() {
 }
 
 const CSP = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:\">";
+const CSP_NET = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https:; style-src 'unsafe-inline' https:; img-src data: blob: https:; media-src data: blob: https:; font-src data: https:; connect-src https: wss:\">";
+const csp = () => (window.__pr.net ? CSP_NET : CSP);
 const SHIM = `<script>(function(){var P=function(t,m){try{parent.postMessage({__pv:t,m:String(m)},'*')}catch(e){}};
 addEventListener('error',function(e){P('error',(e.message||'script error')+(e.lineno?' (line '+e.lineno+')':''))});
 addEventListener('unhandledrejection',function(e){P('error',e.reason)});
@@ -280,10 +282,10 @@ function buildDoc(src) {
   if (!t) return '';
   if (t[0] === '<') {
     const dt = /^\s*<!doctype[^>]*>/i.exec(src);
-    if (dt) return dt[0] + CSP + SHIM + src.slice(dt[0].length);
-    return '<!doctype html>' + CSP + SHIM + src;
+    if (dt) return dt[0] + csp() + SHIM + src.slice(dt[0].length);
+    return '<!doctype html>' + csp() + SHIM + src;
   }
-  return '<!doctype html>' + CSP + SHIM + '<body><script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script></body>';
+  return '<!doctype html>' + csp() + SHIM + '<body><script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script></body>';
 }
 function setupPreview() {
   const frame = $('#frame'), log = $('#pvlog'); let timer = 0;
@@ -317,7 +319,10 @@ function setupPreview() {
         log.appendChild(b);
       }
     }
-    else if (k === 'blocked') say('pverr', 'Blocked (no internet in the preview): ' + e.data.m);
+    else if (k === 'blocked') {
+      say('pverr', 'Blocked (no internet in the preview): ' + e.data.m);
+      if (!window.__pr.net && !log.querySelector('.netbtn')) { const nb = document.createElement('button'); nb.className = 'netbtn'; nb.textContent = 'Turn on internet for this app'; nb.onclick = () => { $('#netok').checked = true; $('#netok').onchange(); }; log.appendChild(nb); }
+    }
     else if (k === 'note' && e.data.m !== 'started') say('pvnote2', e.data.m);
   });
   const run = () => {
@@ -331,6 +336,7 @@ function setupPreview() {
   document.querySelectorAll('[data-idea]').forEach((b) => { b.onclick = () => { $('#onebox').value = b.dataset.idea; $('#onebox').focus(); }; });
   $('#advsw').onchange = () => { document.body.classList.toggle('showadv', $('#advsw').checked); };
   $('#gear').onclick = () => { const d = $('#settings'); d.open = !d.open; if (d.open) d.scrollIntoView({ behavior: 'smooth' }); };
+  $('#netok').onchange = () => { window.__pr.net = $('#netok').checked; $('#netwarn').textContent = window.__pr.net ? 'On. This app can load things from the internet. It still cannot see your room, your key, or your friends.' : 'Off. Turn on only for apps that need things from the internet.'; run(); };
   window.__pr.previewDoc = (src) => { frame.srcdoc = buildDoc(src); say('pvnote2', 'Trying the change. Press Accept to keep it, or Skip to leave your game as it is.'); };
   $('#run').onclick = run;
   document.querySelectorAll('#starters button').forEach((b) => {
