@@ -1,19 +1,21 @@
 import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
-const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8126);
-const b = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--no-sandbox', '--allow-loopback-in-peer-connection'] });
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8128);
+const b = await chromium.launch({ args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--allow-loopback-in-peer-connection'] });
 const mk = async (u) => { const p = await (await b.newContext()).newPage(); await p.goto(u); return p; };
-const A = await mk('http://localhost:8126/');
-// stub model module: same API as ai.js, canned answer (UI wiring test only, not model quality)
-await A.route('**/ai.js', (r) => r.fulfill({ contentType: 'text/javascript', body: `export const gpuInfo=async()=>({ok:true,f16:false});export const hasModel=()=>true;export const loadModel=async(id,cb)=>{cb('x',1)};export const ask=async(m,cb)=>{window.__lastMsgs=m;const t='Here:\\n\`\`\`js\\nfunction add(a,b){return a+b}\\n\`\`\`';cb(t);return t};export const stop=()=>{}` }));
-await A.click('#create'); const url = A.url(); await A.click('#nocam'); await A.waitForTimeout(1500);
+const stub = (r) => r.fulfill({ contentType: 'text/javascript', body: `export const gpuInfo=async()=>({ok:true,f16:false});export const hasModel=()=>true;export const loadModel=async(id,cb)=>{cb('x',1)};export const ask=async(m,cb)=>{const t='\`\`\`js\\n'+(window.__reply||'function add(a,b){return a+b}')+'\\n\`\`\`';cb(t);return t};export const stop=()=>{}` });
+const A = await mk('http://localhost:8128/'); await A.route('**/ai.js', stub); await A.click('#create'); const url = A.url(); await A.click('#nocam'); await A.waitForTimeout(1500);
 const B = await mk(url); await B.click('#nocam'); await B.waitForTimeout(7000);
-await A.click('.cm-content'); await A.keyboard.type('// start', { delay: 10 });
-await A.click('#aiload'); await A.waitForTimeout(500); console.log(await A.textContent('#aiprog'));
-await A.fill('#aiq', 'add function'); await A.click('#aiask'); await A.waitForTimeout(500);
-console.log('asked; ctx included code:', (await A.evaluate(() => window.__lastMsgs[1].content)).includes('// start'));
-await A.click('#aiins'); await B.waitForTimeout(2000);
-const dA = await A.evaluate(() => window.__pr.doc.getText('code').toString()), dB = await B.evaluate(() => window.__pr.doc.getText('code').toString());
-console.log('A doc', JSON.stringify(dA)); console.log('B doc', JSON.stringify(dB));
-console.log('B has no ai output panel text:', (await B.textContent('#aiout')) === '');
-await A.screenshot({ path: '/tmp/pr_ai.png', fullPage: true });
-await b.close(); srv.close();
+const doc = (p) => p.evaluate(() => window.__pr.doc.getText('code').toString());
+await A.click('.cm-content'); await A.keyboard.type('line1\nline2', { delay: 10 }); await B.waitForTimeout(1000);
+const ask = async (P, reply) => { await P.evaluate((r) => { window.__reply = r; }, reply); await P.click('#aiload'); await P.waitForTimeout(400); await P.fill('#aiq', 'q'); await P.click('#aiask'); await P.waitForTimeout(400); await P.click('#aiins'); };
+await ask(A, 'function add(a,b){return a+b}'); await B.waitForTimeout(1500);
+console.log('A doc after propose:', JSON.stringify(await doc(A)));
+console.log('B sees proposal:', (await B.textContent('#proplist')).includes('Suggestion from Guest 1'));
+await B.click('.cm-content'); await B.keyboard.press('Control+Home'); await B.keyboard.press('End'); // cursor end of line1
+await B.click('text=Accept (insert at my cursor)'); await B.waitForTimeout(1500);
+const dA = await doc(A), dB = await doc(B); console.log('after accept A:', JSON.stringify(dA)); console.log('same:', dA === dB, 'contains:', dA.includes('function add'));
+console.log('A list:', (await A.textContent('#proplist')).slice(0, 100));
+await ask(A, 'REJECTME'); await B.waitForTimeout(1500); await B.click('button:has-text("Reject")'); await B.waitForTimeout(1500);
+const dA2 = await doc(A); console.log('reject kept docs unchanged:', dA2 === dA && !dA2.includes('REJECTME'), '| A list:', (await A.textContent('#proplist')).slice(0, 120));
+const ok = dA === dB && dA.includes('function add') && dA2 === dA;
+console.log(ok ? 'PROP PASS' : 'PROP FAIL'); await b.close(); srv.close(); process.exit(ok ? 0 : 1);
