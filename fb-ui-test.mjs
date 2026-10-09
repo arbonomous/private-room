@@ -1,0 +1,14 @@
+import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8173);
+const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+const p = await (await b.newContext()).newPage(); let sent = null;
+await p.route('**/fb', async (r) => { sent = r.request().postData(); await r.fulfill({ status: 200, body: 'ok' }); });
+await p.goto('http://localhost:8173/');
+await p.click('#fbhome'); await p.click('input[value=no]'); await p.fill('#fbtext', 'black screen');
+let prev = await p.textContent('#fbprev'); const ok = (n, c) => { console.log((c ? 'PASS ' : 'FAIL ') + n); if (!c) process.exitCode = 1; };
+ok('preview shows text, no device', prev.includes('black screen') && !prev.includes('device'));
+await p.check('#fbdev'); prev = await p.textContent('#fbprev'); ok('device only when ticked', prev.includes('device') && prev.includes('mut3d'));
+await p.click('#fbsend'); await p.waitForTimeout(500);
+ok('sent equals preview', JSON.stringify(JSON.parse(sent)) === JSON.stringify(JSON.parse(prev)));
+ok('no room data in payload', !/#|key|room|name/i.test(sent.replace(/mut3d/,'').replace(/"device":"[^"]*"/,'')));
+await b.close(); srv.close();
