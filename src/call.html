@@ -26,7 +26,7 @@ details.how{margin-top:22px;text-align:left;color:var(--muted);font-size:14px}de
 figure{margin:0;position:relative;min-height:0;min-width:0;background:#000;border-radius:14px;overflow:hidden}
 figure video{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;object-fit:cover;border:3px solid var(--line);border-radius:14px;background:#000;pointer-events:none}
 figure.off video{opacity:.15}
-figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-radius:8px;padding:6px 10px;font-size:13px;text-align:center;pointer-events:none;z-index:2}figure .tap{position:absolute;top:calc(50% - 24px);left:15%;margin:0;width:70%;height:48px;z-index:3;background:var(--signal);color:#131A17}figcaption{position:absolute;left:8px;bottom:8px;background:#000a;border-radius:8px;padding:2px 8px;font-size:13px;pointer-events:none}
+figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-radius:8px;padding:6px 10px;font-size:13px;text-align:center;pointer-events:none;z-index:2}figure .tap{position:absolute;top:6px;right:6px;left:auto;margin:0;width:auto;height:34px;padding:0 12px;font-size:12px;z-index:3;background:var(--signal);color:#131A17}figure .tap.big{top:calc(50% - 24px);left:15%;right:15%;height:48px;font-size:15px}figcaption{position:absolute;left:8px;bottom:8px;background:#000a;border-radius:8px;padding:2px 8px;font-size:13px;pointer-events:none}
 #chatpanel{width:320px;flex:none;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;min-height:0}
 #chatpanel[hidden]{display:none}
 #log{flex:1;min-height:0;overflow:auto;font-size:15px;word-break:break-word;-webkit-overflow-scrolling:touch}.msg{margin:4px 0}.sys{color:var(--muted);font-size:12px;margin:4px 0;text-align:center}.msg a{color:var(--accent);font-weight:600}
@@ -43,7 +43,7 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;background:#000b;border-
 .opts{text-align:left;max-width:320px;margin:0 auto 12px;font-size:14px;color:var(--muted)}.opts label{display:block;margin:6px 0}.opts select{background:#10151c;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px;font-size:15px}
 #chatbtn.ping{outline:2px solid var(--good)}
 #moredet{font-size:13px;color:var(--muted);padding:6px 4px}#audit{line-height:1.6}
-@media(max-width:720px){#chatpanel{position:absolute;left:0;right:0;bottom:0;width:auto;height:55%;z-index:4;box-shadow:0 -8px 24px #000a}#share{display:none}.top h1{font-size:16px}}
+@media(max-width:720px){#main{flex-direction:column}#main>#chatpanel{position:static;width:auto;flex:1 1 0;min-height:120px;margin-top:8px}#main.chat #videos{flex:0 0 clamp(84px,18%,120px);grid-template-columns:none!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)!important}#main.chat figcaption{font-size:11px;left:4px;bottom:4px;padding:1px 5px}#main.chat figure .st{font-size:11px;padding:2px 6px}#share{display:none}.top h1{font-size:16px}}
 @media(max-width:720px) and (orientation:portrait){#videos[data-n="2"]{grid-template-columns:1fr}#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}}
 </style></head>
 <body>
