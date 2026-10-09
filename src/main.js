@@ -34,19 +34,23 @@ window.__pr = { doc, conns, stats, Peer };
 function status(t) { $('#status').textContent = t; }
 const slotOf = (id) => +id.split('-').pop();
 
-async function seal(type, u8) {
+// Every message is bound to its type, its sender and its recipient through AES-GCM additional data.
+// Changing the type byte, or reflecting a packet back at its sender, makes decryption fail.
+const aadFor = (type, from, to) => new TextEncoder().encode(type + '|' + from + '|' + to);
+const myId = () => roomId + '-' + me;
+async function seal(type, u8, c) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, u8));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aadFor(type, myId(), c.peer) }, aes, u8));
   const out = new Uint8Array(1 + 12 + ct.length);
   out[0] = type; out.set(iv, 1); out.set(ct, 13);
   return out;
 }
-async function open(d) {
+async function open(d, c) {
   const u = d instanceof Uint8Array ? d : new Uint8Array(d.buffer ? d.buffer : d);
-  const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(1, 13) }, aes, u.slice(13)));
+  const pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u.slice(1, 13), additionalData: aadFor(u[0], c.peer, myId()) }, aes, u.slice(13)));
   return [u[0], pt];
 }
-async function send(c, type, u8) { if (!c.open) return; c.send(await seal(type, u8)); stats.sent++; }
+async function send(c, type, u8) { if (!c.open) return; c.send(await seal(type, u8, c)); stats.sent++; }
 function broadcast(type, u8) { for (const c of conns.values()) send(c, type, u8); }
 
 function fakeStream(label) {
@@ -118,13 +122,13 @@ function onConn(c, outgoing) {
     }
     tryAnswer(s);
   };
-  const hello = async () => c.send(await seal(2, c.__nonce));
+  const hello = async () => c.send(await seal(2, c.__nonce, c));
   c.on('open', hello);
   if (c.open) hello();
   c.on('data', async (d) => {
     try {
-      const [type, pt] = await open(d);
-      if (type === 2) { c.send(await seal(3, pt)); return; }
+      const [type, pt] = await open(d, c);
+      if (type === 2) { c.send(await seal(3, pt, c)); return; }
       if (type === 3) {
         if (c.__authed) return;
         if (pt.length === 16 && pt.every((x, i) => x === c.__nonce[i])) await admit();
