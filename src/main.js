@@ -7,6 +7,7 @@ import { EditorState, Prec } from '@codemirror/state';
 import { html } from '@codemirror/lang-html';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { TEMPLATES } from './templates.js';
+import { MODELS, makeCloud, usage as cloudUsage, limit as CLOUD_LIMIT } from './cloud.js';
 
 const $ = (s) => document.querySelector(s);
 const enc = new TextEncoder();
@@ -344,7 +345,22 @@ function extractCode(reply) {
 }
 
 function setupAI() {
-  let ai = null, last = '';
+  let ai = null, last = '', localReady = false;
+  const cloud = makeCloud(() => $('#orkey').value.trim(), () => $('#ormodel').value, () => cloudUi());
+  const useCloud = () => $('#cloudon').checked;
+  const brain = () => (useCloud() ? cloud : ai);
+  const cloudUi = () => {
+    $('#orbox').hidden = !useCloud();
+    $('#cloudst').textContent = 'Cloud requests used today: ' + cloudUsage() + ' of about ' + CLOUD_LIMIT + (useCloud() && !$('#orkey').value.trim() ? '. Paste your key to start.' : '.');
+    $('#aiask').disabled = useCloud() ? !$('#orkey').value.trim() : !localReady;
+  };
+  $('#ormodel').innerHTML = MODELS.map((m) => '<option value="' + m[0] + '">' + m[1] + '</option>').join('');
+  try { const k = localStorage.getItem('pr_or_key'); if (k) { $('#orkey').value = k; $('#orremember').checked = true; } } catch (e) { /* ignore */ }
+  $('#cloudon').onchange = cloudUi;
+  $('#orkey').oninput = () => { try { if ($('#orremember').checked) localStorage.setItem('pr_or_key', $('#orkey').value.trim()); } catch (e) { /* ignore */ } cloudUi(); };
+  $('#orremember').onchange = () => { try { if ($('#orremember').checked) localStorage.setItem('pr_or_key', $('#orkey').value.trim()); else localStorage.removeItem('pr_or_key'); } catch (e) { /* ignore */ } };
+  $('#orforget').onclick = () => { $('#orkey').value = ''; try { localStorage.removeItem('pr_or_key'); } catch (e) { /* ignore */ } cloudUi(); };
+  window.__pr.cloudUi = cloudUi;
   const sys = 'You are a concise coding assistant inside a pair-programming room. Answer briefly. If the user asks for a page, game or app, reply with ONE complete self-contained HTML file in a single ```html code block: inline CSS and JavaScript, no external libraries, images or network calls, no localStorage. Use let (not const) for any variable that is reassigned later, such as score, lives, position or game state; use const only for values that never change. For shooter, 3D or doom-like requests, build a Wolfenstein-style raycaster: a 2D map array, cast one ray per screen column with a small step, draw one vertical wall strip per column on a canvas, draw enemies as sprites compared against the wall distance. NEVER use import, export, require or <script src>. Do not use frameworks (no Phaser, p5, three.js, jQuery); write vanilla JavaScript with the canvas or DOM only, with all code inline. Otherwise put code in one fenced code block.';
   const prog = (t) => { $('#aiprog').textContent = t; };
   $('#aiload').onclick = async () => {
@@ -365,7 +381,7 @@ function setupAI() {
       if (!loaded) throw new Error(why || 'no model could be loaded');
       $('#aimodel').value = loaded;
       prog('Ready. Running the ' + names[loaded] + ' model' + (loaded !== chosen ? ' (the bigger one did not fit, so this smaller one was used)' : '') + ', loaded in ' + Math.round((performance.now() - t0) / 1000) + 's. It runs on this device only.');
-      $('#aiask').disabled = false; $('#aiload').disabled = false;
+      localReady = true; cloudUi(); $('#aiload').disabled = false;
     } catch (e) { prog('Could not load the AI: ' + (e.message || e)); $('#aiload').disabled = false; }
   };
   $('#aiask').onclick = async () => {
@@ -373,23 +389,23 @@ function setupAI() {
     const code = $('#aictx').checked ? '\n\nCurrent code:\n```\n' + ytext.toString().slice(0, 6000) + '\n```' : '';
     $('#aiask').disabled = true; $('#aistop').disabled = false; $('#aiins').disabled = true; $('#aiout').textContent = '';
     const t0 = performance.now();
-    try { last = await ai.ask([{ role: 'system', content: sys }, { role: 'user', content: q + code }], (t) => { $('#aiout').textContent = t; }); }
+    try { last = await brain().ask([{ role: 'system', content: sys }, { role: 'user', content: q + code }], (t) => { $('#aiout').textContent = t; }); }
     catch (e) { $('#aiout').textContent = 'Error: ' + (e.message || e); }
     prog('Answered in ' + Math.round((performance.now() - t0) / 1000) + 's');
-    $('#aiask').disabled = false; $('#aistop').disabled = true; $('#aiins').disabled = !last;
+    cloudUi(); $('#aistop').disabled = true; $('#aiins').disabled = !last;
     if (window.__pr.autoPropose && last) { window.__pr.autoPropose = false; $('#aiins').click(); }
   };
 
   const bst = (t) => { $('#buildst').textContent = t; };
   const ensureAI = async () => {
-    if (!$('#aiask').disabled) return true;
+    if (useCloud()) return !!$('#orkey').value.trim() || (bst('Paste your OpenRouter key in the Cloud AI box first.'), false);
+    if (localReady) return true;
     $('#aiload').click();
     for (let i = 0; i < 1800; i++) { await new Promise((r) => setTimeout(r, 500)); if (!$('#aiask').disabled) return true; if (/Could not|not available|WebGPU|GPU/i.test($('#aiprog').textContent) && !$('#aiload').disabled) return false; }
     return false;
   };
   let building = false, cancel = false;
-  const MAXTRY = 3;
-  $('#bstop').onclick = () => { cancel = true; if (ai) ai.stop(); };
+  $('#bstop').onclick = () => { cancel = true; const b = brain(); if (b) b.stop(); };
   $('#build').onclick = async () => {
     const desc = $('#onebox').value.trim(); if (!desc || building) return;
     const kw = /doom|wolfenstein|first[- ]?person|\bfps\b|3d shooter/i.test(desc) ? 'doom' : desc.length < 50 && /\bsnake\b/i.test(desc) ? 'snake' : desc.length < 50 && /\bpong\b/i.test(desc) ? 'pong' : desc.length < 50 && /clicker/i.test(desc) ? 'clicker' : desc.length < 50 && /memory/i.test(desc) ? 'memory' : '';
@@ -404,13 +420,14 @@ function setupAI() {
     try {
       bst('Starting the AI (the first time downloads the model, this can take a few minutes)...');
       if (!(await ensureAI())) { bst('The AI could not start here: ' + $('#aiprog').textContent + ' You can still use the Start here games above.'); return; }
+      const MAXTRY = useCloud() ? 2 : 3;
       let code = '', err = '', saved = false;
       for (let attempt = 0; attempt <= MAXTRY; attempt++) {
         if (cancel) { bst('Stopped.'); return; }
         const user = attempt === 0 ? desc : 'This code failed with: ' + err + '\nHere is the code:\n```html\n' + code.slice(0, 6000) + '\n```\nFix it and give me the complete corrected code as ONE self-contained HTML file. Use let (not const) for anything reassigned. No imports or libraries.';
         bst(attempt === 0 ? 'Writing your game...' : 'Fixing a problem automatically (try ' + attempt + ' of ' + MAXTRY + ')...');
         let reply = '';
-        try { reply = await ai.ask([{ role: 'system', content: sys }, { role: 'user', content: user }], (t) => { $('#aiout').textContent = t; }); } catch (e) { bst('The AI stopped with an error: ' + (e.message || e)); return; }
+        try { reply = await brain().ask([{ role: 'system', content: sys }, { role: 'user', content: user }], (t) => { $('#aiout').textContent = t; }); } catch (e) { bst('The AI stopped with an error: ' + (e.message || e)); return; }
         if (cancel) { bst('Stopped.'); return; }
         const next = extractCode(reply);
         if (!next.trim()) { err = 'The reply had no code.'; continue; }
@@ -426,7 +443,7 @@ function setupAI() {
       bst('Could not get it working after ' + MAXTRY + ' automatic fixes (' + String(err).slice(0, 120) + '). Try the Stronger (3B) model in the AI panel, describe it more simply, or tap a Start here game. Your previous code is saved under Checkpoints.');
     } finally { building = false; $('#build').disabled = false; $('#bstop').disabled = true; }
   };
-  $('#aistop').onclick = () => ai && ai.stop();
+  $('#aistop').onclick = () => { const b = brain(); if (b) b.stop(); };
   $('#aiins').onclick = () => {
     const txt = extractCode(last);
     if (!txt.trim()) return;
