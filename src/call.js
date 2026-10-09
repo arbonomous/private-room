@@ -180,7 +180,55 @@ function tryAnswer(s) {
   call.answer(currentOut());
   watchCall(s, call);
 }
-const currentOut = () => local;
+const currentOut = () => (voice.track ? new MediaStream([voice.track, ...local.getVideoTracks()]) : local);
+// ---- voice disguise: processes only the outgoing mic, in this browser. Off by default. ----
+const voice = { ctx: null, track: null, node: null, src: null, mon: null, preset: 'off', hear: false };
+const WORKLET = 'class P extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(8192);this.w=0;this.ph=0;this.r=1;this.port.onmessage=e=>{this.r=e.data}}process(i,o){const x=i[0]&&i[0][0],y=o[0][0];if(!x||!y)return true;const W=1536,N=8192,b=this.b;for(let k=0;k<x.length;k++){b[this.w]=x[k];let out=0;for(let h=0;h<2;h++){const p=(this.ph+h*0.5)%1;let rp=this.w-(p*W+1);if(rp<0)rp+=N;const i0=Math.floor(rp),f=rp-i0,s=b[i0]*(1-f)+b[(i0+1)%N]*f,g=Math.sin(Math.PI*p);out+=s*g*g}y[k]=out;this.w=(this.w+1)%N;this.ph+=(1-this.r)/W;if(this.ph>=1)this.ph-=1;if(this.ph<0)this.ph+=1}return true}}registerProcessor("p",P)';
+const RATIO = { deeper: 0.72, higher: 1.45 };
+async function voiceInit() {
+  if (voice.ctx) { if (voice.ctx.state === 'suspended') await voice.ctx.resume().catch(() => {}); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('no AudioContext');
+  const mic = local.getAudioTracks()[0]; if (!mic) throw new Error('no mic');
+  const ctx = new AC({ latencyHint: 'interactive' }); await ctx.resume().catch(() => {});
+  if (!ctx.audioWorklet) throw new Error('no worklet');
+  await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' })));
+  const src = ctx.createMediaStreamSource(new MediaStream([mic]));
+  const node = new AudioWorkletNode(ctx, 'p');
+  const ring = ctx.createGain(); const osc = ctx.createOscillator(); osc.frequency.value = 55; const ringDepth = ctx.createGain(); ringDepth.gain.value = 0; osc.connect(ring.gain); osc.start();
+  const dry = ctx.createGain(); const wet = ctx.createGain(); const robot = ctx.createGain();
+  const dest = ctx.createMediaStreamDestination();
+  const mon = ctx.createGain(); mon.gain.value = 0; mon.connect(ctx.destination);
+  const out = ctx.createGain(); out.connect(dest); out.connect(mon);
+  src.connect(dry); dry.connect(out);
+  src.connect(node); node.connect(wet); wet.connect(out);
+  src.connect(ring); ring.gain.value = 0; ring.connect(robot); robot.connect(out);
+  Object.assign(voice, { ctx, src, node, dry, wet, robot, mon, out, dest, osc });
+  voice.track = dest.stream.getAudioTracks()[0]; voice.track.enabled = state.mic;
+}
+function voiceApply() {
+  const p = voice.preset;
+  voice.dry.gain.value = p === 'off' ? 1 : 0; voice.wet.gain.value = RATIO[p] ? 1 : 0; voice.robot.gain.value = p === 'robot' ? 1.4 : 0;
+  voice.node.port.postMessage(RATIO[p] || 1); voice.mon.gain.value = voice.hear && p !== 'off' ? 1 : 0;
+}
+function voiceSwap(track) {
+  for (const call of calls.values()) {
+    const pc = call.peerConnection; if (!pc) continue;
+    const snd = pc.getSenders().find((x) => x.track && x.track.kind === 'audio');
+    if (snd && track) snd.replaceTrack(track).catch(() => {});
+  }
+}
+async function setVoice(p) {
+  const sel = $('#voice');
+  try {
+    if (p !== 'off' || voice.ctx) await voiceInit();
+    voice.preset = p; voice.ctx ? voiceApply() : 0;
+    if (voice.track) voiceSwap(p === 'off' ? local.getAudioTracks()[0] : voice.track);
+    if (p === 'off' && voice.track) voice.track.enabled = state.mic;
+    if (p !== 'off') voice.track.enabled = state.mic;
+    window.__pr.voice = p;
+    if (p !== 'off') sysMsg('Voice effect on. It disguises how you sound; it does not make you anonymous.');
+  } catch (e) { voice.preset = 'off'; if (sel) sel.value = 'off'; sysMsg('Voice effects are not available in this browser.'); window.__pr.voiceErr = String(e && e.message); }
+}
 function watchCall(s, call) {
   calls.set(s, call);
   call.on('stream', (st) => addVideo(s, st, false));
@@ -405,7 +453,7 @@ function sweep() {
 
 // ---- controls ----
 function setTracks() {
-  local.getAudioTracks().forEach((t) => { t.enabled = state.mic; });
+  local.getAudioTracks().forEach((t) => { t.enabled = state.mic; }); if (voice.track) voice.track.enabled = state.mic;
   local.getVideoTracks().forEach((t) => { t.enabled = state.cam; });
   $('#mic').textContent = state.mic ? 'Mute' : 'Unmute'; $('#mic').classList.toggle('off', !state.mic);
   $('#camb').textContent = state.cam ? 'Camera off' : 'Camera on'; $('#camb').classList.toggle('off', !state.cam);
@@ -509,6 +557,7 @@ async function start(useCam) {
   $('#camb').onclick = () => { state.cam = !state.cam; setTracks(); };
   $('#share').onclick = () => { $('#sheet').hidden = true; toggleShare(); };
   $('#more').onclick = () => { $('#sheet').hidden = !$('#sheet').hidden; };
+  $('#voice').onchange = (e) => setVoice(e.target.value); $('#hear').onchange = (e) => { voice.hear = e.target.checked; if (voice.ctx) voiceApply(); };
   $('#verbtn').onclick = showVerify; $('#verclose').onclick = () => { $('#verify').hidden = true; };
   $('#burn').onclick = () => { $('#sheet').hidden = true; if (!approvalMode || isHost) burn(); };
   $('#burn').hidden = approvalMode && !isHost;
