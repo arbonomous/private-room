@@ -24,6 +24,7 @@ const doc = new Y.Doc();
 const ytext = doc.getText('code');
 const awareness = new Awareness(doc);
 const props = doc.getMap('proposals');
+const queue = doc.getMap('queue');
 const cps = doc.getMap('checkpoints');
 const authors = doc.getMap('authors');
 let view;
@@ -210,19 +211,27 @@ function setupCheckpoints() {
   const render = () => {
     const all = [...cps.values()].sort((x, y) => y.t - x.t);
     list.innerHTML = '';
-    if (!all.length) { list.innerHTML = '<span class="muted">None yet. A checkpoint is saved automatically before any suggestion is accepted or anything is restored.</span>'; return; }
+    if (!all.length) { list.innerHTML = '<span class="muted">Nothing yet. A version is saved automatically before every change.</span>'; return; }
     for (const c of all.slice(0, 10)) {
       const d = document.createElement('div'); d.className = 'cp';
       const when = new Date(c.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const s = document.createElement('span'); s.textContent = when + ' - ' + c.author + ' - ' + c.label + ' (' + c.text.length + ' chars)';
-      const b = document.createElement('button'); b.className = 'alt'; b.textContent = 'Restore';
+      const s = document.createElement('span'); s.textContent = when + ' - ' + c.label;
+      const b = document.createElement('button'); b.className = 'alt'; b.textContent = 'Go back to this';
       b.onclick = () => {
-        if (!window.confirm('Replace the shared code for everyone with this checkpoint? A checkpoint of the current code is saved first.')) return;
+        if (!window.confirm('Put the game back the way it was? This changes it for everyone. Your current game is saved first.')) return;
         save('Before restoring the ' + when + ' checkpoint');
         doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, c.text); });
       };
       d.appendChild(s); d.appendChild(b); list.appendChild(d);
     }
+  };
+  $('#undolast').onclick = () => {
+    const cur = ytext.toString();
+    const prev = [...cps.values()].sort((x, y) => y.t - x.t).find((c) => c.text !== cur);
+    if (!prev) { $('#buildst').textContent = 'Nothing to undo yet.'; return; }
+    save('Before undoing the last change');
+    doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, prev.text); });
+    $('#buildst').textContent = 'Undone. Your game is back to how it was.';
   };
   cps.observe(render); render();
 }
@@ -232,25 +241,28 @@ function setupProposals() {
   const render = () => {
     const all = [...props.values()].sort((x, y) => y.t - x.t);
     list.innerHTML = '';
-    if (!all.length) { list.innerHTML = '<span class="muted">None yet. Anyone can propose AI code; nothing changes until someone presses Accept.</span>'; return; }
+    if (!all.length && !queue.size) { list.innerHTML = '<span class="muted">When a friend\'s AI wants to change the game, it shows up here. Nothing changes until you accept.</span>'; return; }
+    for (const q of [...queue.values()].sort((a, b) => a.t - b.t)) { const w = document.createElement('div'); w.className = 'prop done'; w.textContent = 'In line: ' + q.author + ' wants: ' + q.want; list.appendChild(w); }
     for (const p of all.slice(0, 12)) {
       const d = document.createElement('div'); d.className = 'prop' + (p.status === 'pending' ? '' : ' done');
-      if (p.status !== 'pending') { d.textContent = p.author + "'s suggestion was " + p.status + (p.by ? ' by ' + p.by : '') + '.'; list.appendChild(d); continue; }
-      const hd = document.createElement('div'); hd.textContent = 'Suggestion from ' + p.author; d.appendChild(hd);
-      const pre = document.createElement('pre'); pre.textContent = p.text; d.appendChild(pre);
-      const ok = document.createElement('button'); ok.textContent = 'Accept (insert at my cursor)';
-      const no = document.createElement('button'); no.textContent = 'Reject'; no.className = 'alt';
+      if (p.status !== 'pending') { d.textContent = p.author + "'s change was " + (p.status === 'rejected' ? 'skipped' : p.status) + (p.by ? ' by ' + p.by : '') + '.'; list.appendChild(d); continue; }
+      const hd = document.createElement('div'); hd.textContent = p.want ? p.author + ' wants: ' + p.want : p.author + "'s AI wants to change the game"; d.appendChild(hd);
+      const pre = document.createElement('pre'); pre.className = 'tech'; pre.textContent = p.text; d.appendChild(pre);
+      const pvb = document.createElement('button'); pvb.className = 'alt'; pvb.textContent = 'Preview'; pvb.onclick = () => { const full = /^\s*(<!doctype|<html)/i.test(p.text); const at0 = Math.min(view.state.selection.main.head, ytext.length); const t0 = ytext.toString(); window.__pr.previewDoc(full ? p.text : t0.slice(0, at0) + '\n' + p.text + '\n' + t0.slice(at0)); }; d.appendChild(pvb);
+      const ok = document.createElement('button'); ok.textContent = 'Accept';
+      const no = document.createElement('button'); no.textContent = 'Skip'; no.className = 'alt';
       ok.onclick = () => {
         const cur = props.get(p.id); if (!cur || cur.status !== 'pending') return;
         if (window.__pr.beforeAccept) window.__pr.beforeAccept('Before accepting ' + p.author + "'s suggestion");
         const at = Math.min(view.state.selection.main.head, ytext.length);
-        doc.transact(() => { ytext.insert(at, '\n' + p.text + '\n'); props.set(p.id, { ...cur, status: 'accepted', by: 'Guest ' + (me + 1) }); });
+        const full = /^\s*(<!doctype|<html)/i.test(p.text);
+        doc.transact(() => { if (full) { ytext.delete(0, ytext.length); ytext.insert(0, p.text); } else ytext.insert(at, '\n' + p.text + '\n'); props.set(p.id, { ...cur, status: 'accepted', by: 'Guest ' + (me + 1) }); });
       };
-      no.onclick = () => { const cur = props.get(p.id); if (cur && cur.status === 'pending') props.set(p.id, { ...cur, status: 'rejected', by: 'Guest ' + (me + 1) }); };
+      no.onclick = () => { const cur = props.get(p.id); if (cur && cur.status === 'pending') window.__pr.runPreview(); if (cur && cur.status === 'pending') props.set(p.id, { ...cur, status: 'rejected', by: 'Guest ' + (me + 1) }); };
       d.appendChild(ok); d.appendChild(no); list.appendChild(d);
     }
   };
-  props.observe(render); render();
+  props.observe(render); doc.getMap('queue').observe(render); render();
 }
 
 const CSP = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:\">";
@@ -275,7 +287,7 @@ function buildDoc(src) {
 }
 function setupPreview() {
   const frame = $('#frame'), log = $('#pvlog'); let timer = 0;
-  const say = (cls, t) => { const d = document.createElement('div'); d.className = cls; d.textContent = t; log.appendChild(d); while (log.children.length > 8) log.firstChild.remove(); };
+  const say = (cls, t) => { const d = document.createElement('div'); d.className = cls + (/^Ran at/.test(t) ? ' tech' : ''); if (cls === 'pverr') { const f = document.createElement('span'); f.textContent = "That didn't work. "; d.appendChild(f); const x = document.createElement('span'); x.className = 'tech'; x.textContent = t; d.appendChild(x); const h = document.createElement('span'); h.textContent = ' Tell the AI what went wrong and it will try to fix it.'; d.appendChild(h); } else d.textContent = t; log.appendChild(d); while (log.children.length > 8) log.firstChild.remove(); };
   addEventListener('message', (e) => {
     if (e.source !== frame.contentWindow || !e.data || !e.data.__pv) return;
     const k = e.data.__pv; const OFF = (SHIM.match(/\n/g) || []).length;
@@ -313,9 +325,13 @@ function setupPreview() {
     const src = ytext.toString(); const doc2 = buildDoc(src);
     if (!doc2) { say('pverr', 'Nothing to run: the editor is empty.'); frame.srcdoc = ''; return; }
     frame.srcdoc = doc2;
-    say('pvnote2', 'Ran at ' + new Date().toLocaleTimeString() + ' (' + src.length + ' characters). Click inside the preview to use the keyboard.');
+    say('pvnote2', 'Ran at ' + new Date().toLocaleTimeString() + '. Click the game once so the keyboard works.');
     setTimeout(() => { try { frame.focus(); } catch (e) { /* ignore */ } }, 300);
   };
+  document.querySelectorAll('[data-idea]').forEach((b) => { b.onclick = () => { $('#onebox').value = b.dataset.idea; $('#onebox').focus(); }; });
+  $('#advsw').onchange = () => { document.body.classList.toggle('showadv', $('#advsw').checked); };
+  $('#gear').onclick = () => { const d = $('#settings'); d.open = !d.open; if (d.open) d.scrollIntoView({ behavior: 'smooth' }); };
+  window.__pr.previewDoc = (src) => { frame.srcdoc = buildDoc(src); say('pvnote2', 'Trying the change. Press Accept to keep it, or Skip to leave your game as it is.'); };
   $('#run').onclick = run;
   document.querySelectorAll('#starters button').forEach((b) => {
     b.onclick = () => {
@@ -406,9 +422,21 @@ function setupAI() {
   };
   let building = false, cancel = false;
   $('#bstop').onclick = () => { cancel = true; const b = brain(); if (b) b.stop(); };
-  $('#build').onclick = async () => {
-    const desc = $('#onebox').value.trim(); if (!desc || building) return;
-    const kw = /doom|wolfenstein|first[- ]?person|\bfps\b|3d shooter/i.test(desc) ? 'doom' : desc.length < 50 && /\bsnake\b/i.test(desc) ? 'snake' : desc.length < 50 && /\bpong\b/i.test(desc) ? 'pong' : desc.length < 50 && /clicker/i.test(desc) ? 'clicker' : desc.length < 50 && /memory/i.test(desc) ? 'memory' : '';
+  const CHANGE_RE = /^(make|add|change|remove|fix|turn|let|give|now|also|and|can|please|use|set|speed|slow|bigger|smaller|it |the )|\b(it|the game|my game)\b/i;
+  const pendingAny = () => [...props.values()].some((x) => x.status === 'pending');
+  $('#build').onclick = () => { const d = $('#onebox').value.trim(); if (!d || building) return; doBuild(d, false); };
+  const doBuild = async (desc, fromQueue) => {
+    if (building) return;
+    const peers = conns.size > 0;
+    if (peers && ytext.length > 0 && !fromQueue && (pendingAny() || queue.size > 0) && CHANGE_RE.test(desc)) {
+      const qid = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      queue.set(qid, { id: qid, author: 'Guest ' + (me + 1), want: desc, t: Date.now() });
+      $('#onebox').value = ''; bst('Added to the line. Someone is deciding on another change first. Yours will be built on top of the newest game right after.');
+      return;
+    }
+    const changeMode = ytext.length > 0 && CHANGE_RE.test(desc);
+    const request = changeMode && peers;
+    const kw = changeMode ? '' : /doom|wolfenstein|first[- ]?person|\bfps\b|3d shooter/i.test(desc) ? 'doom' : desc.length < 50 && /\bsnake\b/i.test(desc) ? 'snake' : desc.length < 50 && /\bpong\b/i.test(desc) ? 'pong' : desc.length < 50 && /clicker/i.test(desc) ? 'clicker' : desc.length < 50 && /memory/i.test(desc) ? 'memory' : '';
     if (kw) {
       if (window.__pr.beforeAccept && ytext.length) window.__pr.beforeAccept('Before loading the ' + TEMPLATES[kw][0] + ' starter');
       doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, TEMPLATES[kw][1]); });
@@ -421,10 +449,11 @@ function setupAI() {
       bst('Starting the AI (the first time downloads the model, this can take a few minutes)...');
       if (!(await ensureAI())) { bst('The AI could not start here: ' + $('#aiprog').textContent + ' You can still use the Start here games above.'); return; }
       const MAXTRY = useCloud() ? 2 : 3;
+      const code0 = ytext.toString();
       let code = '', err = '', saved = false;
       for (let attempt = 0; attempt <= MAXTRY; attempt++) {
         if (cancel) { bst('Stopped.'); return; }
-        const user = attempt === 0 ? desc : 'This code failed with: ' + err + '\nHere is the code:\n```html\n' + code.slice(0, 6000) + '\n```\nFix it and give me the complete corrected code as ONE self-contained HTML file. Use let (not const) for anything reassigned. No imports or libraries.';
+        const user = attempt === 0 ? (changeMode ? 'Here is my current game:\n```html\n' + code0.slice(0, 6000) + '\n```\nChange it like this: ' + desc + '\nGive me the complete updated code as ONE self-contained HTML file. Use let (not const) for anything reassigned. No imports or libraries.' : desc) : 'This code failed with: ' + err + '\nHere is the code:\n```html\n' + code.slice(0, 6000) + '\n```\nFix it and give me the complete corrected code as ONE self-contained HTML file. Use let (not const) for anything reassigned. No imports or libraries.';
         bst(attempt === 0 ? 'Writing your game...' : 'Fixing a problem automatically (try ' + attempt + ' of ' + MAXTRY + ')...');
         let reply = '';
         try { reply = await brain().ask([{ role: 'system', content: sys }, { role: 'user', content: user }], (t) => { $('#aiout').textContent = t; }); } catch (e) { bst('The AI stopped with an error: ' + (e.message || e)); return; }
@@ -433,16 +462,24 @@ function setupAI() {
         if (!next.trim()) { err = 'The reply had no code.'; continue; }
         code = next;
         if (!saved && window.__pr.beforeAccept && ytext.length) { window.__pr.beforeAccept('Before AI built: ' + desc.slice(0, 40)); saved = true; }
-        doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, code); });
-        window.__pr.lastErr = null; window.__pr.runPreview();
+        if (request) window.__pr.previewDoc(code); else doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, code); });
+        window.__pr.lastErr = null; if (!request) window.__pr.runPreview();
         await new Promise((r) => setTimeout(r, 2500));
+        if (!window.__pr.lastErr && request) { const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); props.set(id, { id, author: 'Guest ' + (me + 1), want: desc, text: code, status: 'pending', t: Date.now() }); $('#onebox').value = ''; bst('Your change is shared with the room. Everyone can try it, then one person accepts or skips it.'); return; }
         if (!window.__pr.lastErr) { bst(attempt === 0 ? 'Done. It is running in the preview. Click inside it to play.' : 'Done. The AI fixed it by itself (' + attempt + ' ' + (attempt === 1 ? 'fix' : 'fixes') + '). It is running in the preview.'); return; }
-        const mm = /line (\d+)/.exec(window.__pr.lastErr); const ln = mm ? ytext.toString().split('\n')[+mm[1] - 1] : '';
+        const mm = /line (\d+)/.exec(window.__pr.lastErr); const ln = mm ? (request ? code : ytext.toString()).split('\n')[+mm[1] - 1] : '';
         err = window.__pr.lastErr + (ln ? ' | line: ' + ln.trim().slice(0, 200) : '');
       }
       bst('Could not get it working after ' + MAXTRY + ' automatic fixes (' + String(err).slice(0, 120) + '). Try the Stronger (3B) model in the AI panel, describe it more simply, or tap a Start here game. Your previous code is saved under Checkpoints.');
     } finally { building = false; $('#build').disabled = false; $('#bstop').disabled = true; }
   };
+  const pump = () => {
+    if (building || pendingAny() || !queue.size) return;
+    const head = [...queue.values()].sort((a, b) => a.t - b.t)[0];
+    if (head.author !== 'Guest ' + (me + 1)) return;
+    queue.delete(head.id); $('#onebox').value = head.want; doBuild(head.want, true);
+  };
+  props.observe(() => setTimeout(pump, 400)); queue.observe(() => setTimeout(pump, 400));
   $('#aistop').onclick = () => { const b = brain(); if (b) b.stop(); };
   $('#aiins').onclick = () => {
     const txt = extractCode(last);
