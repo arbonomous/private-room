@@ -21,6 +21,7 @@ const doc = new Y.Doc();
 const ytext = doc.getText('code');
 const awareness = new Awareness(doc);
 const props = doc.getMap('proposals');
+const cps = doc.getMap('checkpoints');
 let view;
 const colors = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f'];
 window.__pr = { doc, conns, stats, Peer };
@@ -167,17 +168,37 @@ function setupEditor() {
   });
 }
 
-const CSP = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:\">";
-function setupPreview() {
-  const frame = $('#frame'); let timer = 0;
-  const run = () => {
-    const src = ytext.toString();
-    const isHtml = /<\s*(html|body|script|canvas|div|style|h1|p|button)\b/i.test(src);
-    frame.srcdoc = CSP + (isHtml ? src : '<body><script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script></body>');
+function setupCheckpoints() {
+  const list = $('#cplist');
+  const save = (label) => {
+    const text = ytext.toString();
+    const last = [...cps.values()].sort((x, y) => y.t - x.t)[0];
+    if (last && last.text === text) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    cps.set(id, { id, label, author: 'Guest ' + (me + 1), t: Date.now(), text });
+    const all = [...cps.values()].sort((x, y) => y.t - x.t);
+    for (const old of all.slice(30)) cps.delete(old.id);
   };
-  $('#run').onclick = run;
-  ytext.observe(() => { if ($('#autorun').checked) { clearTimeout(timer); timer = setTimeout(run, 1000); } });
-  window.__pr.runPreview = run;
+  window.__pr.beforeAccept = save;
+  $('#cpsave').onclick = () => { save('Saved by hand'); };
+  const render = () => {
+    const all = [...cps.values()].sort((x, y) => y.t - x.t);
+    list.innerHTML = '';
+    if (!all.length) { list.innerHTML = '<span class="muted">None yet. A checkpoint is saved automatically before any suggestion is accepted or anything is restored.</span>'; return; }
+    for (const c of all.slice(0, 10)) {
+      const d = document.createElement('div'); d.className = 'cp';
+      const when = new Date(c.t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const s = document.createElement('span'); s.textContent = when + ' - ' + c.author + ' - ' + c.label + ' (' + c.text.length + ' chars)';
+      const b = document.createElement('button'); b.className = 'alt'; b.textContent = 'Restore';
+      b.onclick = () => {
+        if (!window.confirm('Replace the shared code for everyone with this checkpoint? A checkpoint of the current code is saved first.')) return;
+        save('Before restoring the ' + when + ' checkpoint');
+        doc.transact(() => { ytext.delete(0, ytext.length); ytext.insert(0, c.text); });
+      };
+      d.appendChild(s); d.appendChild(b); list.appendChild(d);
+    }
+  };
+  cps.observe(render); render();
 }
 
 function setupProposals() {
@@ -206,6 +227,64 @@ function setupProposals() {
   props.observe(render); render();
 }
 
+const CSP = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:\">";
+const SHIM = `<script>(function(){var P=function(t,m){try{parent.postMessage({__pv:t,m:String(m)},'*')}catch(e){}};
+addEventListener('error',function(e){P('error',(e.message||'script error')+(e.lineno?' (line '+e.lineno+')':''))});
+addEventListener('unhandledrejection',function(e){P('error',e.reason)});
+addEventListener('securitypolicyviolation',function(e){P('blocked',e.blockedURI+' ('+e.violatedDirective+')')});
+var ce=console.error;console.error=function(){P('error',[].join.call(arguments,' '));ce.apply(console,arguments)};
+var mem={};function st(){return{getItem:function(k){return k in mem?mem[k]:null},setItem:function(k,v){mem[k]=String(v)},removeItem:function(k){delete mem[k]},clear:function(){mem={}},key:function(i){return Object.keys(mem)[i]||null},get length(){return Object.keys(mem).length}}}
+try{Object.defineProperty(window,'localStorage',{value:st(),configurable:true});Object.defineProperty(window,'sessionStorage',{value:st(),configurable:true})}catch(e){}
+window.alert=function(x){P('note','alert: '+x)};window.confirm=function(){return true};window.prompt=function(){return null};
+P('note','started');})()<\/script>`;
+function buildDoc(src) {
+  const t = src.trim();
+  if (!t) return '';
+  if (t[0] === '<') {
+    const dt = /^\s*<!doctype[^>]*>/i.exec(src);
+    if (dt) return dt[0] + CSP + SHIM + src.slice(dt[0].length);
+    return '<!doctype html>' + CSP + SHIM + src;
+  }
+  return '<!doctype html>' + CSP + SHIM + '<body><script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script></body>';
+}
+function setupPreview() {
+  const frame = $('#frame'), log = $('#pvlog'); let timer = 0;
+  const say = (cls, t) => { const d = document.createElement('div'); d.className = cls; d.textContent = t; log.appendChild(d); while (log.children.length > 8) log.firstChild.remove(); };
+  addEventListener('message', (e) => {
+    if (e.source !== frame.contentWindow || !e.data || !e.data.__pv) return;
+    const k = e.data.__pv;
+    if (k === 'error') say('pverr', 'Error in your code: ' + e.data.m);
+    else if (k === 'blocked') say('pverr', 'Blocked (no internet in the preview): ' + e.data.m);
+    else if (k === 'note' && e.data.m !== 'started') say('pvnote2', e.data.m);
+  });
+  const run = () => {
+    log.innerHTML = '';
+    const src = ytext.toString(); const doc2 = buildDoc(src);
+    if (!doc2) { say('pverr', 'Nothing to run: the editor is empty.'); frame.srcdoc = ''; return; }
+    frame.srcdoc = doc2;
+    say('pvnote2', 'Ran at ' + new Date().toLocaleTimeString() + ' (' + src.length + ' characters). Click inside the preview to use the keyboard.');
+    setTimeout(() => { try { frame.focus(); } catch (e) { /* ignore */ } }, 300);
+  };
+  $('#run').onclick = run;
+  ytext.observe(() => { if ($('#autorun').checked) { clearTimeout(timer); timer = setTimeout(run, 1000); } });
+  window.__pr.runPreview = run;
+}
+
+function extractCode(reply) {
+  const blocks = [...reply.matchAll(/```([A-Za-z0-9+#-]*)[ \t]*\n([\s\S]*?)(?:```|$)/g)].map((x) => ({ lang: x[1].toLowerCase(), code: x[2].replace(/\n+$/, '') })).filter((b) => b.code.trim());
+  if (!blocks.length) return reply.trim();
+  if (blocks.length === 1) return blocks[0].code;
+  const css = blocks.filter((b) => b.lang === 'css').map((b) => b.code).join('\n');
+  const js = blocks.filter((b) => /^(js|javascript|jsx|ts)$/.test(b.lang)).map((b) => b.code).join('\n');
+  const htm = blocks.filter((b) => /^(html|htm)$/.test(b.lang) || (!b.lang && b.code.trim()[0] === '<')).map((b) => b.code).join('\n');
+  if (!htm && !css) return blocks.map((b) => b.code).join('\n');
+  let out = htm || '<!doctype html>\n<html><body></body></html>';
+  const add = (s, tag) => { if (!s) return; const blk = '<' + tag + '>\n' + s + '\n</' + tag + '>\n'; out = /<\/body>/i.test(out) ? out.replace(/<\/body>/i, () => blk + '</body>') : out + '\n' + blk; };
+  if (css && !/<style/i.test(out)) add(css, 'style');
+  if (js && !/<script[^>]*>[^<]/i.test(out)) add(js, 'script');
+  return out;
+}
+
 function setupAI() {
   let ai = null, last = '';
   const prog = (t) => { $('#aiprog').textContent = t; };
@@ -224,7 +303,7 @@ function setupAI() {
   };
   $('#aiask').onclick = async () => {
     const q = $('#aiq').value.trim(); if (!q) return;
-    const sys = 'You are a concise coding assistant inside a pair-programming room. Answer briefly. Put any code in one fenced code block.';
+    const sys = 'You are a concise coding assistant inside a pair-programming room. Answer briefly. If the user asks for a page, game or app, reply with ONE complete self-contained HTML file in a single ```html code block: inline CSS and JavaScript, no external libraries, images or network calls, no localStorage. Otherwise put code in one fenced code block.';
     const code = $('#aictx').checked ? '\n\nCurrent code:\n```\n' + ytext.toString().slice(0, 6000) + '\n```' : '';
     $('#aiask').disabled = true; $('#aistop').disabled = false; $('#aiins').disabled = true; $('#aiout').textContent = '';
     const t0 = performance.now();
@@ -235,7 +314,7 @@ function setupAI() {
   };
   $('#aistop').onclick = () => ai && ai.stop();
   $('#aiins').onclick = () => {
-    const mt = /```[a-zA-Z]*\n([\s\S]*?)```/.exec(last); const txt = (mt ? mt[1] : last).replace(/\n$/, '');
+    const txt = extractCode(last);
     if (!txt.trim()) return;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     props.set(id, { id, author: 'Guest ' + (me + 1), text: txt, status: 'pending', t: Date.now() });
@@ -268,7 +347,7 @@ async function start(useCam) {
   window.__pr.roomId = roomId;
   $('#gate').hidden = true; $('#room').hidden = false;
   local = await getStream(useCam);
-  setupEditor(); setupProposals(); setupPreview(); setupAI(); register(0);
+  setupEditor(); setupCheckpoints(); setupProposals(); setupPreview(); setupAI(); register(0);
   setInterval(refresh, 1000);
 }
 
