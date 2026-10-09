@@ -1,7 +1,7 @@
 import { Peer } from 'peerjs';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v7';
+const VERSION = 'v8';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -180,7 +180,49 @@ function tryAnswer(s) {
   call.answer(currentOut());
   watchCall(s, call);
 }
-const currentOut = () => (voice.track ? new MediaStream([voice.track, ...local.getVideoTracks()]) : local);
+const vidTracks = () => (face.on && face.track ? [face.track] : local.getVideoTracks());
+const currentOut = () => (voice.track || face.on ? new MediaStream([...(voice.track ? [voice.track] : local.getAudioTracks()), ...vidTracks()]) : local);
+// ---- face disguise: draws the outgoing camera onto a small canvas with an effect, in this browser. Off = the untouched camera. ----
+// Not face-tracked: these cover or blur the whole picture. Capped at 480px wide and 15 fps to save battery.
+const face = { on: false, preset: 'off', track: null, cv: null, vid: null, timer: null, tiny: null };
+function faceDraw() {
+  const v = face.vid, cv = face.cv; if (!v || !v.videoWidth || !state.cam) return;
+  const w = Math.min(480, v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const x = cv.getContext('2d'), t = face.tiny, tx = t.getContext('2d');
+  const down = (tw, th, smooth) => { t.width = tw; t.height = th; tx.imageSmoothingEnabled = smooth; tx.drawImage(v, 0, 0, tw, th); };
+  const p = face.preset;
+  if (p === 'pixel') { down(24, Math.max(2, Math.round(24 * h / w)), false); x.imageSmoothingEnabled = false; x.drawImage(t, 0, 0, w, h); }
+  else { down(16, Math.max(2, Math.round(16 * h / w)), true); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; x.drawImage(t, 0, 0, w, h); }
+  if (p === 'emoji') { x.font = Math.round(Math.min(w, h) * 0.8) + 'px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('\u{1F60E}', w / 2, h / 2); }
+}
+function faceSwapTo(track) {
+  const box = tile(me); const vv = box && box.querySelector('video');
+  if (!screen) { swapVideo(track); if (vv) vv.srcObject = face.on ? new MediaStream([face.track]) : local; }
+}
+function setFace(p) {
+  const sel = $('#face');
+  try {
+    if (p === 'off') {
+      face.on = false; face.preset = 'off'; clearInterval(face.timer); face.timer = null;
+      faceSwapTo(local.getVideoTracks()[0]); window.__pr.face = 'off'; return;
+    }
+    const raw = local.getVideoTracks()[0];
+    if (!raw || !state.cam && !face.track) { if (sel) sel.value = 'off'; sysMsg('Turn your camera on first to use a face effect.'); return; }
+    if (!face.cv) {
+      face.cv = document.createElement('canvas'); face.tiny = document.createElement('canvas');
+      if (!face.cv.captureStream) throw new Error('no captureStream');
+      const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.autoplay = true; v.setAttribute('playsinline', ''); v.srcObject = new MediaStream([raw]);
+      v.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none'; document.body.appendChild(v); v.play().catch(() => {}); face.vid = v;
+      face.cv.width = 480; face.cv.height = 360;
+      face.track = face.cv.captureStream(15).getVideoTracks()[0];
+    }
+    face.preset = p; face.on = true; face.track.enabled = state.cam;
+    if (!face.timer) face.timer = setInterval(faceDraw, 66);
+    faceDraw(); faceSwapTo(face.track); window.__pr.face = p;
+    sysMsg('Face effect on. It hides your face, not you: your voice, background and room can still identify you.');
+  } catch (e) { face.on = false; face.preset = 'off'; clearInterval(face.timer); face.timer = null; if (sel) sel.value = 'off'; sysMsg('Face effects are not available in this browser.'); window.__pr.faceErr = String(e && e.message); }
+}
 // ---- voice disguise: processes only the outgoing mic, in this browser. Off by default. ----
 const voice = { ctx: null, track: null, node: null, src: null, mon: null, preset: 'off', hear: false };
 const WORKLET = 'class P extends AudioWorkletProcessor{constructor(){super();this.b=new Float32Array(8192);this.w=0;this.ph=0;this.r=1;this.port.onmessage=e=>{this.r=e.data}}process(i,o){const x=i[0]&&i[0][0],y=o[0][0];if(!x||!y)return true;const W=1536,N=8192,b=this.b;for(let k=0;k<x.length;k++){b[this.w]=x[k];let out=0;for(let h=0;h<2;h++){const p=(this.ph+h*0.5)%1;let rp=this.w-(p*W+1);if(rp<0)rp+=N;const i0=Math.floor(rp),f=rp-i0,s=b[i0]*(1-f)+b[(i0+1)%N]*f,g=Math.sin(Math.PI*p);out+=s*g*g}y[k]=out;this.w=(this.w+1)%N;this.ph+=(1-this.r)/W;if(this.ph>=1)this.ph-=1;if(this.ph<0)this.ph+=1}return true}}registerProcessor("p",P)';
@@ -464,7 +506,7 @@ function sweep() {
 // ---- controls ----
 function setTracks() {
   local.getAudioTracks().forEach((t) => { t.enabled = state.mic; }); if (voice.track) voice.track.enabled = state.mic;
-  local.getVideoTracks().forEach((t) => { t.enabled = state.cam; });
+  local.getVideoTracks().forEach((t) => { t.enabled = state.cam; }); if (face.track) face.track.enabled = state.cam;
   $('#mic').textContent = state.mic ? 'Mute' : 'Unmute'; $('#mic').classList.toggle('off', !state.mic);
   $('#camb').textContent = state.cam ? 'Camera off' : 'Camera on'; $('#camb').classList.toggle('off', !state.cam);
   paintTile(me); sendMeta();
@@ -489,8 +531,8 @@ async function toggleShare() {
 function stopShare() {
   if (!screen) return;
   screen.getTracks().forEach((t) => t.stop()); screen = null;
-  const v = local.getVideoTracks()[0]; if (v) swapVideo(v);
-  tile(me).querySelector('video').srcObject = local;
+  const v = vidTracks()[0]; if (v) swapVideo(v);
+  tile(me).querySelector('video').srcObject = face.on ? new MediaStream([face.track]) : local;
   $('#share').textContent = 'Share screen'; paintTile(me); sendMeta();
 }
 // ---- end room, verify code ----
@@ -567,7 +609,7 @@ async function start(useCam) {
   $('#camb').onclick = () => { state.cam = !state.cam; setTracks(); };
   $('#share').onclick = () => { $('#sheet').hidden = true; toggleShare(); };
   $('#more').onclick = () => { $('#sheet').hidden = !$('#sheet').hidden; };
-  $('#voice').onchange = (e) => setVoice(e.target.value); $('#hear').onchange = (e) => { voice.hear = e.target.checked; if (voice.ctx) voiceApply(); };
+  $('#face').onchange = (e) => setFace(e.target.value); $('#voice').onchange = (e) => setVoice(e.target.value); $('#hear').onchange = (e) => { voice.hear = e.target.checked; if (voice.ctx) voiceApply(); };
   $('#verbtn').onclick = showVerify; $('#verclose').onclick = () => { $('#verify').hidden = true; };
   $('#burn').onclick = () => { $('#sheet').hidden = true; if (!approvalMode || isHost) burn(); };
   $('#burn').hidden = approvalMode && !isHost;
