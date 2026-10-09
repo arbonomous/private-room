@@ -27,6 +27,8 @@ function parseHash() {
     else if (t[0] === 'e') expiryMin = parseInt(t.slice(1), 36) || 0;
     else if (t[0] === 's') hostPriv = t.slice(1);
   }
+  try { const k = 'mut3d-hs:' + key; if (hostPriv) sessionStorage.setItem(k, hostPriv); else if (hostPub) hostPriv = sessionStorage.getItem(k) || null; } catch (e) { /* storage blocked */ }
+  if (hostPub && location.hash.includes('.s')) history.replaceState(null, '', inviteLink());
   approvalMode = !!hostPub; isHost = !!(hostPub && hostPriv); selfOk = !approvalMode || isHost;
 }
 function inviteLink() {
@@ -255,10 +257,11 @@ function showKnock(s, name) {
   const row = document.createElement('div'); row.className = 'knock';
   const t = document.createElement('span'); t.textContent = (name || 'Someone') + ' wants to join';
   const y = document.createElement('button'); y.textContent = 'Let in'; const n = document.createElement('button'); n.textContent = 'Deny'; n.className = 'alt';
-  row.append(t, y, n); $('#knocks').appendChild(row); knocks.set(s, row);
+  row.append(t, y, n); $('#knocks').appendChild(row); knocks.set(s, row); alertKnock();
   y.onclick = () => admitGuest(s); n.onclick = () => denyGuest(s);
 }
-function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } }
+function alertKnock() { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ } document.title = '(' + knocks.size + ') Someone wants to join'; }
+function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } document.title = knocks.size ? '(' + knocks.size + ') Someone wants to join' : APP_NAME; }
 function admitGuest(s) {
   const c = conns.get(s); clearKnock(s); if (!c || !c.__authed || !isHost) return;
   const members = [...conns.values()].filter((x) => x.__ok && x !== c).map((x) => slotOf(x.peer));
@@ -508,6 +511,8 @@ async function start(useCam) {
   $('#file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) sendFile(f); };
   $('#attach').onclick = () => $('#file').click();
   $('#copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(inviteLink()); $('#copy').textContent = 'Link copied'; setTimeout(() => { $('#copy').textContent = 'Copy invite link'; }, 2000); };
+  $('#mode').textContent = approvalMode ? (isHost ? 'You are the host. Approval on' : 'Approval on') : 'Open room: anyone with the link joins';
+  $('#mode').className = approvalMode ? 'on' : 'open';
   setTracks();
   if (!selfOk) { $('#wait').hidden = false; status('Waiting for the host'); }
   if (expiryMin) setInterval(() => { if (Date.now() / 60000 > expiryMin) wipe('This room expired. Chat and files were cleared.'); }, 10000);
