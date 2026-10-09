@@ -1,6 +1,6 @@
 import { Peer } from 'peerjs';
 
-const APP_NAME = 'mut3'; // working name, change here only
+const APP_NAME = 'mut3d'; // working name, change here only
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
