@@ -8,6 +8,7 @@ async function init(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS fb (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, worked TEXT, text TEXT, app TEXT, device TEXT, screen TEXT)'),
     db.prepare('CREATE TABLE IF NOT EXISTS rl (k TEXT PRIMARY KEY, n INTEGER, exp INTEGER)'),
   ]);
+  try { await db.prepare('ALTER TABLE fb ADD COLUMN diag TEXT').run(); } catch (e) { /* exists */ }
   ready = true;
 }
 export default {
@@ -35,7 +36,7 @@ export default {
         if ((await get(dk)) >= 300) return new Response('full', { status: 429 });
         const up = (k, ttl) => env.DB.prepare('INSERT INTO rl (k,n,exp) VALUES (?,1,?) ON CONFLICT(k) DO UPDATE SET n=n+1').bind(k, now + ttl).run();
         await up(hk, 3700000); await up(dk, 90000000);
-        await env.DB.prepare('INSERT INTO fb (at,worked,text,app,device,screen) VALUES (?,?,?,?,?,?)').bind(new Date(now).toISOString(), worked, text, c('app'), c('device'), c('screen')).run();
+        await env.DB.prepare('INSERT INTO fb (at,worked,text,app,device,screen,diag) VALUES (?,?,?,?,?,?,?)').bind(new Date(now).toISOString(), worked, text, c('app'), c('device'), c('screen'), typeof o.diag === 'string' ? o.diag.slice(0, 600) : null).run();
         return new Response('ok', { status: 200, headers: { 'cache-control': 'no-store' } });
       } catch (e) { return new Response('err', { status: 500 }); }
     }
@@ -43,7 +44,7 @@ export default {
       if (!env.DB || !env.ADMIN || req.headers.get('authorization') !== 'Bearer ' + env.ADMIN) return new Response('no', { status: 401 });
       await init(env.DB);
       const since = +(u.searchParams.get('since') || 0);
-      const r = await env.DB.prepare('SELECT id,at,worked,text,app,device,screen FROM fb WHERE id > ? ORDER BY id LIMIT 100').bind(since).all();
+      const r = await env.DB.prepare('SELECT id,at,worked,text,app,device,screen,diag FROM fb WHERE id > ? ORDER BY id LIMIT 100').bind(since).all();
       return new Response(JSON.stringify(r.results), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     }
     return env.ASSETS.fetch(req);
