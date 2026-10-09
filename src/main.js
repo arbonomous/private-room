@@ -165,6 +165,40 @@ function setupEditor() {
   });
 }
 
+function setupAI() {
+  let ai = null, last = '';
+  const prog = (t) => { $('#aiprog').textContent = t; };
+  $('#aiload').onclick = async () => {
+    try {
+      ai = ai || await import(new URL('./ai.js', location.href).href);
+      const g = await ai.gpuInfo();
+      if (!g.ok) { prog(g.why); return; }
+      const base = $('#aimodel').value, id = base + (g.f16 ? '-q4f16_1-MLC' : '-q4f32_1-MLC');
+      if (!ai.hasModel(id)) { prog('Model not available: ' + id); return; }
+      $('#aiload').disabled = true; const t0 = performance.now();
+      await ai.loadModel(id, (t, p) => prog(Math.round(p * 100) + '% ' + t));
+      prog('Ready (' + id + ', loaded in ' + Math.round((performance.now() - t0) / 1000) + 's). Running on this device only.');
+      $('#aiask').disabled = false; $('#aiload').disabled = false;
+    } catch (e) { prog('Could not load the AI: ' + (e.message || e)); $('#aiload').disabled = false; }
+  };
+  $('#aiask').onclick = async () => {
+    const q = $('#aiq').value.trim(); if (!q) return;
+    const sys = 'You are a concise coding assistant inside a pair-programming room. Answer briefly. Put any code in one fenced code block.';
+    const code = $('#aictx').checked ? '\n\nCurrent code:\n```\n' + ytext.toString().slice(0, 6000) + '\n```' : '';
+    $('#aiask').disabled = true; $('#aistop').disabled = false; $('#aiins').disabled = true; $('#aiout').textContent = '';
+    const t0 = performance.now();
+    try { last = await ai.ask([{ role: 'system', content: sys }, { role: 'user', content: q + code }], (t) => { $('#aiout').textContent = t; }); }
+    catch (e) { $('#aiout').textContent = 'Error: ' + (e.message || e); }
+    prog('Answered in ' + Math.round((performance.now() - t0) / 1000) + 's');
+    $('#aiask').disabled = false; $('#aistop').disabled = true; $('#aiins').disabled = !last;
+  };
+  $('#aistop').onclick = () => ai && ai.stop();
+  $('#aiins').onclick = () => {
+    const mt = /```[a-zA-Z]*\n([\s\S]*?)```/.exec(last); const txt = mt ? mt[1] : last;
+    ytext.insert(ytext.length, '\n' + txt.replace(/\n$/, '') + '\n');
+  };
+}
+
 function scan() {
   const a = window.__audit; const text = ytext.toString();
   const toks = (text.match(/[A-Za-z0-9_]{8,}/g) || []);
@@ -190,7 +224,7 @@ async function start(useCam) {
   window.__pr.roomId = roomId;
   $('#gate').hidden = true; $('#room').hidden = false;
   local = await getStream(useCam);
-  setupEditor(); register(0);
+  setupEditor(); setupAI(); register(0);
   setInterval(refresh, 1000);
 }
 
