@@ -28,7 +28,7 @@ const res = await X.evaluate(async (rid) => {
   return out;
 }, rid);
 console.log('attacker result', JSON.stringify(res));
-const stA = await A.evaluate(() => ({ conns: [...window.__pr.conns.keys()], vids: document.querySelectorAll('video').length, doc: window.__pr.doc.getText('code').toString() }));
+const stA = await A.evaluate(() => ({ conns: [...window.__pr.conns.keys()], vids: document.querySelectorAll('video').length }));
 const stB = await B.evaluate(() => ({ conns: [...window.__pr.conns.keys()], vids: document.querySelectorAll('video').length }));
 console.log('A', JSON.stringify(stA), 'B', JSON.stringify(stB));
 const pass = res.open > 0 && res.stream === 0 && res.data <= res.open && stA.conns.length === 1 && stB.conns.length === 1 && stA.vids === 2 && stB.vids === 2;
