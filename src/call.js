@@ -549,3 +549,28 @@ function boot() {
   window.addEventListener('hashchange', show);
 }
 boot();
+
+// ---- feedback: sends only what the sheet previews, nothing about rooms, keys, names or chat ----
+(function () {
+  const q = (s) => document.querySelector(s); if (!q('#fb')) return;
+  const build = () => {
+    const w = (document.querySelector('input[name=fbw]:checked') || {}).value || '';
+    const o = { worked: w, text: q('#fbtext').value.trim().slice(0, 1500) };
+    if (q('#fbdev').checked) { o.app = APP_NAME + ' ' + VERSION; o.device = (navigator.userAgent || '').slice(0, 160); o.screen = window.screen.width + 'x' + window.screen.height; }
+    return o;
+  };
+  const prev = () => { q('#fbprev').textContent = JSON.stringify(build(), null, 1); };
+  const open = (e) => { if (e) e.preventDefault(); q('#sheet').hidden = true; q('#fbmsg').textContent = ''; q('#fbsend').disabled = false; prev(); q('#fb').hidden = false; };
+  q('#fbhome').onclick = open; q('#fbmore').onclick = open;
+  q('#fbclose').onclick = () => { q('#fb').hidden = true; };
+  for (const s of ['#fbtext', '#fbdev', 'input[name=fbw]']) document.querySelectorAll(s).forEach((n) => { n.oninput = prev; n.onchange = prev; });
+  q('#fbsend').onclick = async () => {
+    const o = build(); if (!o.text && !o.worked) { q('#fbmsg').textContent = 'Write something or pick one first.'; return; }
+    q('#fbsend').disabled = true; q('#fbmsg').textContent = 'Sending...';
+    try {
+      const r = await fetch('/fb', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(o), referrerPolicy: 'no-referrer', credentials: 'omit' });
+      if (r.ok) { q('#fbmsg').textContent = 'Sent. Thank you.'; q('#fbtext').value = ''; setTimeout(() => { q('#fb').hidden = true; }, 1200); }
+      else { q('#fbmsg').textContent = r.status === 429 ? 'Too many sends, try again later.' : 'Could not send (' + r.status + ').'; q('#fbsend').disabled = false; }
+    } catch (e) { q('#fbmsg').textContent = 'Could not send. Check your connection.'; q('#fbsend').disabled = false; }
+  };
+})();
