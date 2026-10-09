@@ -1,4 +1,6 @@
-# private-room
+# mut3 (working name)
+
+The repo is still called private-room.
 
 Private video calls and chat in a link. For up to 4 people. No account, no phone number, no app to install, nothing stored.
 
