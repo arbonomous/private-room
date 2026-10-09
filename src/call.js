@@ -19,6 +19,8 @@ const colors = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f'];
 const state = { mic: true, cam: true };
 window.__pr = { conns, stats, Peer, info };
 
+window.addEventListener('error', (e) => { const x = document.getElementById('err'); if (x) { x.style.display = 'block'; x.textContent = 'Problem: ' + (e.message || e.error) + ' (' + (e.lineno || '') + ')'; } });
+window.addEventListener('unhandledrejection', (e) => { const x = document.getElementById('err'); if (x) { x.style.display = 'block'; x.textContent = 'Problem: ' + (e.reason && e.reason.message || e.reason); } });
 const status = (t) => { $('#status').textContent = t; };
 const slotOf = (id) => +id.split('-').pop();
 const nameOf = (s) => (info.get(s) && info.get(s).name) || 'Guest ' + (s + 1);
@@ -54,13 +56,18 @@ function fakeStream(label) {
   return cv.captureStream(15);
 }
 async function getStream(useCam) {
-  if (useCam) {
-    try { return await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: { echoCancellation: true, noiseSuppression: true } }); }
-    catch (e) {
-      try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); status('No camera found, audio only'); state.cam = false; return a; }
-      catch (e2) { status('No camera or mic, using test video'); }
-    }
-  }
+  if (useCam && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // Try nicer settings first, then plain ones: some Safari versions reject specific constraints.
+    const tries = [
+      { video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: { echoCancellation: true, noiseSuppression: true } },
+      { video: { facingMode: 'user' }, audio: true },
+      { video: true, audio: true },
+      { video: true, audio: false },
+    ];
+    for (const c of tries) { try { return await navigator.mediaDevices.getUserMedia(c); } catch (e) { window.__pr.gumErr = e && e.name; } }
+    try { const a = await navigator.mediaDevices.getUserMedia({ audio: true }); status('No camera found, audio only'); state.cam = false; return a; }
+    catch (e2) { status('Camera/mic blocked (' + (window.__pr.gumErr || 'error') + '). Using a test picture.'); }
+  } else if (useCam) status('This browser cannot use the camera here. Using a test picture.');
   state.mic = false; state.cam = false;
   return fakeStream('Guest');
 }
@@ -69,7 +76,7 @@ function tile(slot) {
   let t = tiles.get(slot);
   if (!t) {
     const fig = document.createElement('figure');
-    fig.innerHTML = '<video autoplay playsinline></video><figcaption><span class="nm"></span><span class="ic"></span></figcaption>';
+    fig.innerHTML = '<video autoplay playsinline muted></video><div class="st" hidden></div><button type="button" class="tap" hidden></button><figcaption><span class="nm"></span><span class="ic"></span></figcaption>';
     $('#videos').appendChild(fig); t = fig; tiles.set(slot, t);
   }
   return t;
@@ -82,12 +89,45 @@ function paintTile(slot) {
   t.classList.toggle('off', i.cam === false && !i.sharing);
   const n = tiles.size; $('#videos').dataset.n = n;
 }
+function tryPlay(v, box) {
+  const ov = box.querySelector('.tap');
+  const p = v.play();
+  if (p && p.catch) p.catch(() => {
+    // Browser blocked sound or autoplay. Retry muted so the picture at least shows, and offer a tap to start sound.
+    if (!v.muted) { v.muted = true; v.play().then(() => { ov.textContent = 'Tap for sound'; ov.hidden = false; }).catch(() => { ov.textContent = 'Tap to start video'; ov.hidden = false; }); }
+    else { ov.textContent = 'Tap to start video'; ov.hidden = false; }
+  });
+}
 function addVideo(slot, stream, isLocal) {
   const box = tile(slot); const v = box.querySelector('video');
-  v.srcObject = stream; v.muted = !!isLocal; v.style.borderColor = colors[slot % 4];
-  v.onloadedmetadata = () => v.play().catch(() => {});
-  setTimeout(() => { if (v.paused) v.play().catch(() => {}); }, 1500);
-  paintTile(slot); v.play().catch(() => {});
+  v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', ''); v.playsInline = true;
+  v.srcObject = stream; v.muted = !!isLocal; v.style.borderColor = colors[slot % 4]; box.__stream = stream; box.__local = !!isLocal;
+  const ov = box.querySelector('.tap');
+  ov.onclick = () => { v.muted = !!isLocal; ov.hidden = true; v.play().catch(() => { ov.hidden = false; }); };
+  stream.onaddtrack = () => { v.srcObject = stream; tryPlay(v, box); };
+  v.onloadedmetadata = () => tryPlay(v, box);
+  setTimeout(() => { if (v.paused) tryPlay(v, box); }, 1500);
+  paintTile(slot); tryPlay(v, box);
+}
+// Per-tile health: shows what is wrong instead of a silent black box.
+function health() {
+  for (const [slot, box] of tiles) {
+    const v = box.querySelector('video'), st = box.querySelector('.st'); if (!v || !st) continue;
+    let msg = '';
+    if (slot !== me) {
+      const call = calls.get(slot), pc = call && call.peerConnection;
+      const ice = pc ? pc.iceConnectionState : 'new';
+      const vt = box.__stream && box.__stream.getVideoTracks().length;
+      const camOff = info.get(slot) && info.get(slot).cam === false;
+      if (ice === 'failed') msg = "Couldn't connect video on this network. Try Wi-Fi on both phones.";
+      else if (ice === 'checking' || ice === 'new') msg = 'Connecting...';
+      else if (ice === 'disconnected') msg = 'Connection dropped, retrying...';
+      else if (!camOff && (!vt || v.videoWidth === 0) && !v.paused) msg = 'Waiting for their video...';
+    } else if (!box.__local || v.videoWidth === 0) msg = v.paused ? '' : 'Starting your camera...';
+    if (!v.paused && v.videoWidth > 0) msg = msg && slot !== me ? msg : '';
+    st.textContent = msg; st.hidden = !msg;
+    if (v.paused && v.srcObject && box.querySelector('.tap').hidden) tryPlay(v, box);
+  }
 }
 function dropVideo(slot) { const b = tiles.get(slot); if (b) { b.remove(); tiles.delete(slot); } info.delete(slot); calls.delete(slot); $('#videos').dataset.n = tiles.size; }
 
@@ -330,7 +370,8 @@ async function start(useCam) {
   $('#copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(location.href); $('#copy').textContent = 'Link copied'; setTimeout(() => { $('#copy').textContent = 'Copy invite link'; }, 2000); };
   setTracks();
   register(0);
-  setInterval(sweep, 4000);
+  setInterval(sweep, 4000); setInterval(health, 1000);
+  document.addEventListener('click', () => { for (const b of tiles.values()) { const v = b.querySelector('video'); if (v.paused) tryPlay(v, b); } }, true);
   setInterval(refresh, 1000);
   window.addEventListener('online', sweep);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sweep(); });
