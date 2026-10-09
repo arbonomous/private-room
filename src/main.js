@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate } from 'y-protocols/awareness';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
-import { javascript } from '@codemirror/lang-javascript';
+import { html } from '@codemirror/lang-html';
 import { yCollab } from 'y-codemirror.next';
 
 const $ = (s) => document.querySelector(s);
@@ -160,9 +160,22 @@ function setupEditor() {
   });
   const undo = new Y.UndoManager(ytext);
   new EditorView({
-    state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, javascript(), yCollab(ytext, awareness, { undoManager: undo })] }),
+    state: EditorState.create({ doc: ytext.toString(), extensions: [basicSetup, html(), yCollab(ytext, awareness, { undoManager: undo })] }),
     parent: $('#editor'),
   });
+}
+
+const CSP = "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:\">";
+function setupPreview() {
+  const frame = $('#frame'); let timer = 0;
+  const run = () => {
+    const src = ytext.toString();
+    const isHtml = /<\s*(html|body|script|canvas|div|style|h1|p|button)\b/i.test(src);
+    frame.srcdoc = CSP + (isHtml ? src : '<body><script>' + src.replace(/<\/script/gi, '<\\/script') + '<\/script></body>');
+  };
+  $('#run').onclick = run;
+  ytext.observe(() => { if ($('#autorun').checked) { clearTimeout(timer); timer = setTimeout(run, 1000); } });
+  window.__pr.runPreview = run;
 }
 
 function setupAI() {
@@ -224,7 +237,7 @@ async function start(useCam) {
   window.__pr.roomId = roomId;
   $('#gate').hidden = true; $('#room').hidden = false;
   local = await getStream(useCam);
-  setupEditor(); setupAI(); register(0);
+  setupEditor(); setupPreview(); setupAI(); register(0);
   setInterval(refresh, 1000);
 }
 
