@@ -28,7 +28,7 @@ Live: https://arbonomous-private-room.pages.dev
 - The host's signing key lives in the host's own address bar (the part after the #, not in the invite link). If the host refreshes, the page keeps working; if the host loses that tab's address they lose host rights.
 - The cryptography here has **not been independently audited**. This is a small project, not a replacement for Signal or any audited tool. Do not use it where your safety depends on it.
 - Anyone who has the full link can join, and can see and hear the call. Share the link only with people you trust, over a channel you trust. There is no user identity beyond the name people type.
-- Peers connect directly, so people in the call can see each other's IP addresses. There is no relay server (TURN), so some strict networks (some corporate and cellular networks) may fail to connect.
+- Peers connect directly, so people in the call can see each other's IP addresses. A small free relay (TURN, from metered.ca) is used only as a fallback when a direct connection fails. The relay passes encrypted media and chat, so it sees IP addresses and timing but not content. It is a small free tier (500 MB, shared, no guarantee), so a very strict network may still fail to connect.
 - Up to 4 people. Screen share is not available on most phones.
 - If someone's device is compromised, or they screenshot or record the call, no tool can stop that.
 
@@ -53,3 +53,8 @@ An earlier version added a shared code editor, local AI and a game preview. That
 ## Voice disguise
 
 More menu > Voice disguise: Off (default), Deeper, Higher, Robot. It runs in your own browser on your microphone before the audio is sent, so the others hear the changed voice. It is a disguise, not anonymity: people can still recognise you by what you say and how you talk. "Hear myself" is off by default (use headphones, or you get echo). If the browser blocks audio processing, the call carries on with your normal voice. Effects use some battery on phones.
+
+
+## Connection fallback
+
+`/turn` (a Cloudflare Pages Function) hands the browser short-lived relay credentials (30 minutes). The long-lived secret stays on the server. The endpoint only answers same-site requests and is rate limited. The browser tries a direct path first and uses the relay only if that fails. `relay-test.mjs` forces relay-only and sends data through it.
