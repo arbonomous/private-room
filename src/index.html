@@ -8,7 +8,7 @@ button{background:#3d85c6;color:#fff;border:0;border-radius:8px;padding:10px 16p
 #audit{margin-top:12px;padding:12px;border:1px solid #2b3440;border-radius:8px;font-size:13px;line-height:1.6;color:#c5ced8}#status{color:#81b29a;margin:8px 0}
 </style></head><body><main>
 <h1>private-room</h1>
-<div id="gate"><p>Video, voice and a shared code editor. Everything goes straight between your browsers and is encrypted. The room key stays in the link after the #, so no server ever gets it.</p>
+<div id="gate"><p>Video, voice and code go straight between your browsers, and people only get in if their link holds the room key (the part after the #, which is never sent to any server). Code is encrypted with that key. Video and voice use the browser's built-in WebRTC encryption. A free public introduction server helps browsers find each other and sees connection details such as IP addresses, but not your key or your content.</p>
 <button id="create">Create a room</button><div id="join" hidden><p>You have a room link. Join it:</p><button id="cam">Join with camera</button><button id="nocam" class="alt">Join without camera</button></div></div>
 <div id="room" hidden><button id="copy" class="alt">Copy invite link</button><span id="status"></span><div id="videos"></div><div id="editor"></div><div id="audit"></div></div>
 </main><script>/*AUDIT*/</script><script>/*BUNDLE*/</script></body></html>
