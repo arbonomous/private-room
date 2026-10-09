@@ -1,6 +1,9 @@
 import { Peer } from 'peerjs';
 
+const APP_NAME = 'mut3'; // working name, change here only
 const $ = (s) => document.querySelector(s);
+document.title = APP_NAME;
+document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
 const enc = new TextEncoder(), dec = new TextDecoder();
 const MAX = 4;
 const MAXFILE = 25 * 1024 * 1024;
