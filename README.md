@@ -1,27 +1,25 @@
 # private-room
 
-Private, end-to-end encrypted video rooms with live co-editing, no accounts, no server that sees content. Scoping stage only. Paper only, free infra only.
+Video rooms with a live shared code editor for 2-4 people. No accounts, free infrastructure only.
 
-## Idea
-A browser page like Google Meet where 2-4 friends join by link, talk on video, and edit code together. The room key lives in the URL fragment (after #), so no server ever receives it.
+## How it works
+- The room key is in the link after the `#`. Browsers never send that part to any server.
+- Video and voice go browser to browser over WebRTC (built-in DTLS-SRTP encryption). Code edits (Yjs) and cursors go over WebRTC data channels, additionally sealed with AES-GCM using the room key.
+- A free public PeerJS broker (0.peerjs.com) introduces browsers to each other. Google's free STUN server helps with NAT. Neither sees the key or your content.
+- Admission: when two browsers connect, each sends a random challenge sealed with the room key and must return the other side's challenge. Until that passes, the connection is dropped after 8 seconds, takes no room slot, receives no data, and no video or voice is sent or accepted.
+- The page includes a live "Privacy check" panel counting what was sent to the broker.
 
-## Pieces (all free)
-- Video and voice: WebRTC peer to peer (encrypted by default, DTLS-SRTP)
-- Live co-editing: Yjs (CRDT) over y-webrtc, Monaco editor
-- Signaling: one tiny Cloudflare Worker that only relays encrypted handshakes
-- Relay for hard networks: Cloudflare Realtime TURN lists 1,000 GB/month free; unverified whether signup needs a card. v1 can ship with public STUN only and accept some failed connections.
-- Cap rooms at 4 people for v1 (mesh video gets heavy beyond that)
+## Limits (be honest about these)
+- Max 4 people. No TURN relay, so strict networks may fail to connect.
+- The broker sees peer ids derived from a hash of the key, plus IP addresses and connection setup data (SDP). A malicious broker could disrupt or block rooms, or occupy free slot ids, but cannot read content without the key. Because video and voice rely on WebRTC's own key exchange carried through the broker, a malicious broker could in theory impersonate a peer for video and voice. Code data is protected by the room key either way.
+- Anyone with the full link can join. Share it privately.
+- Tested in desktop Chromium only.
 
-## First slice (about a weekend)
-1. One static page: create a room, copy the link
-2. Two people join, video and voice, key in the link fragment
-3. Shared code editor with both cursors
-4. Proof: network tab shows the signaling server only saw handshakes, and code never left the two browsers
-
-Not in v1: accounts, payments, chat history, screen share, strict no-server decentralization (DHT or Nostr signaling is a later option).
-
-## Prior art
-Jitsi (E2EE limited to Chromium browsers, does not cover chat), OpenCall, P2Pigeon, Quibble (small p2p encrypted call projects, no live co-coding), VS Code Live Share, Zed, Replit, Google Meet (all server mediated).
-
-## Money
-Unlikely to earn soon: free private chat tools already exist. Best case is dev teams that cannot send code through Google or Microsoft. Treat as a build-for-fun and reputation project.
+## Build and test
+```
+npm i
+node build.mjs     # writes dist/index.html (single file)
+node test.mjs      # 3 browsers: join, video, edit sync, leave and rejoin, network capture
+node neg.mjs       # outsider who knows peer ids but not the key: no media, no slot, no content
+```
+Set `URL0=https://...` for neg.mjs to test a deployed copy. Deployed as a single static file on Cloudflare Pages.
