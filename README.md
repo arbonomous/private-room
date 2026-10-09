@@ -10,6 +10,9 @@ Live: https://arbonomous-private-room.pages.dev
 - Group video and voice, mute and camera toggles, screen share (desktop browsers)
 - Encrypted text chat
 - Encrypted file send (up to 25 MB, goes straight to the other people, never stored)
+- Host approval: by default people who open your link wait until you tap "Let in". Nothing (video, chat, files) flows to or from them until then.
+- Verify this call: both sides see the same 5 symbols; read them aloud to confirm nobody is intercepting the call between your two devices.
+- End room for everyone: wipes chat and files from every open tab and closes all connections. Optional auto-close timer (1, 4 or 24 hours).
 - Join by link, with an optional name. Works in current Chrome, Edge, Firefox and Safari.
 
 ## How it works
@@ -20,6 +23,9 @@ Live: https://arbonomous-private-room.pages.dev
 - Nothing is stored anywhere. Close the tab and it is gone. The "Privacy check" panel in the call shows what was sent to the introduction server.
 
 ## Honest limits
+- Host approval, the burn button and the auto-close timer are enforced by each person's browser running this code. They protect against people without the link and honest clients. Someone with the link who runs modified code could ignore them, and anyone can screenshot or record.
+- "Verify this call" detects someone intercepting the call between two devices. It does not prove who the person is.
+- The host's signing key lives in the host's own address bar (the part after the #, not in the invite link). If the host refreshes, the page keeps working; if the host loses that tab's address they lose host rights.
 - The cryptography here has **not been independently audited**. This is a small project, not a replacement for Signal or any audited tool. Do not use it where your safety depends on it.
 - Anyone who has the full link can join, and can see and hear the call. Share the link only with people you trust, over a channel you trust. There is no user identity beyond the name people type.
 - Peers connect directly, so people in the call can see each other's IP addresses. There is no relay server (TURN), so some strict networks (some corporate and cellular networks) may fail to connect.
@@ -31,6 +37,7 @@ Live: https://arbonomous-private-room.pages.dev
 npm install
 node build.mjs        # makes dist/index.html, one self-contained file
 node call-test.mjs    # two or three headless browsers: video, chat, mute, file, screen share, rejoin
+node approve-test.mjs # host approval, impostor host, verify codes, burn, expiry
 node neg.mjs          # outsider without the key gets nothing
 node reflect.mjs      # replayed/reflected admission messages are rejected
 ```
