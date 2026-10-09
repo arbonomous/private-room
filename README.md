@@ -58,3 +58,7 @@ More menu > Voice disguise: Off (default), Deeper, Higher, Robot. It runs in you
 ## Connection fallback
 
 `/turn` (a Cloudflare Pages Function) hands the browser short-lived relay credentials (30 minutes). The long-lived secret stays on the server. The endpoint only answers same-site requests and is rate limited. The browser tries a direct path first and uses the relay only if that fails. `relay-test.mjs` forces relay-only and sends data through it.
+
+## Face disguise
+
+More menu > Face disguise: Off (default, the untouched camera), Blur, Pixelate, Emoji cover. It draws your camera onto a small canvas (480 px wide, 15 fps, to save battery) in your own browser and sends that instead. Nothing is uploaded. These effects cover the whole picture; they are not face-tracked. It is a disguise, not anonymity: your voice, background and room can still identify you. If the browser can't capture a canvas, you get a chat note and the camera stays as is. `face-test.mjs` checks it.
