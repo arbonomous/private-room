@@ -17,7 +17,7 @@ export async function loadModel(id, onProgress) {
 }
 export async function ask(messages, onText) {
   let out = '';
-  const it = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: window.__aiMax || 700 });
+  const it = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: window.__aiMax || 1800 });
   for await (const ch of it) { out += (ch.choices[0] && ch.choices[0].delta.content) || ''; onText(out); }
   return out;
 }
