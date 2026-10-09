@@ -352,8 +352,8 @@ function setupAI() {
       ai = ai || await import(new URL('./ai.js', location.href).href);
       const g = await ai.gpuInfo();
       if (!g.ok) { prog(g.why); return; }
-      const names = { 'Qwen2.5-Coder-3B-Instruct': 'Stronger (3B)', 'Qwen2.5-Coder-1.5B-Instruct': 'Balanced (1.5B)', 'Qwen2.5-Coder-0.5B-Instruct': 'Light (0.5B)' };
-      const order = ['Qwen2.5-Coder-3B-Instruct', 'Qwen2.5-Coder-1.5B-Instruct', 'Qwen2.5-Coder-0.5B-Instruct'];
+      const names = { 'Qwen3.5-9B': 'Strongest (9B)', 'Qwen2.5-Coder-7B-Instruct': 'Strong (7B coder)', 'Qwen2.5-Coder-3B-Instruct': 'Stronger (3B)', 'Qwen2.5-Coder-1.5B-Instruct': 'Balanced (1.5B)', 'Qwen2.5-Coder-0.5B-Instruct': 'Light (0.5B)' };
+      const order = ['Qwen3.5-9B', 'Qwen2.5-Coder-7B-Instruct', 'Qwen2.5-Coder-3B-Instruct', 'Qwen2.5-Coder-1.5B-Instruct', 'Qwen2.5-Coder-0.5B-Instruct'];
       const chosen = $('#aimodel').value; const tries = order.slice(order.indexOf(chosen));
       $('#aiload').disabled = true; const t0 = performance.now(); let loaded = '', why = '';
       for (const base of tries) {
