@@ -1,6 +1,7 @@
 import { Peer } from 'peerjs';
 
 const APP_NAME = 'mut3d'; // working name, change here only
+const VERSION = 'v5';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -251,7 +252,7 @@ function ready(c) {
   tryAnswer(c.__slot);
   sysMsg(nameOf(c.__slot) + ' joined');
 }
-function markOk(c) { if (c.__ok) return; c.__ok = true; send(c, 13, new Uint8Array(1)); ready(c); }
+function markOk(c) { if (c.__ok) return; c.__ok = true; c.__okAt = Date.now(); send(c, 13, new Uint8Array(1)); ready(c); }
 function showKnock(s, name) {
   if (knocks.has(s)) return;
   const row = document.createElement('div'); row.className = 'knock';
@@ -260,10 +261,16 @@ function showKnock(s, name) {
   row.append(t, y, n); $('#knocks').appendChild(row); knocks.set(s, row); alertKnock();
   y.onclick = () => admitGuest(s); n.onclick = () => denyGuest(s);
 }
-function alertKnock() { try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ } document.title = '(' + knocks.size + ') Someone wants to join'; }
-function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } document.title = knocks.size ? '(' + knocks.size + ') Someone wants to join' : APP_NAME; }
+function updateMode() {
+  const m = $('#mode'); if (!m) return;
+  m.textContent = (approvalMode ? (isHost ? 'You are the host. Approval on' : 'Approval on') : 'Open room: anyone with the link joins') + (knocks.size ? ' - ' + knocks.size + ' waiting to join' : '') + (window.__pr.oldPeer ? ' - a friend may be on an old version, refresh both phones' : '') + ' (' + VERSION + ')';
+}
+function alertKnock() { updateMode(); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ } document.title = '(' + knocks.size + ') Someone wants to join'; }
+function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } document.title = knocks.size ? '(' + knocks.size + ') Someone wants to join' : APP_NAME; updateMode(); }
+async function sendProof(c) { if (isHost && c.__peerNonce && c.open) await send(c, 9, await hostSign('host|' + myId() + '|' + c.peer + '|' + hex(c.__peerNonce))); }
 function admitGuest(s) {
   const c = conns.get(s); clearKnock(s); if (!c || !c.__authed || !isHost) return;
+  sendProof(c);
   const members = [...conns.values()].filter((x) => x.__ok && x !== c).map((x) => slotOf(x.peer));
   send(c, 11, json({ self: true, members }));
   for (const x of conns.values()) if (x !== c && x.__ok) send(x, 11, json({ slot: s, ok: true }));
@@ -295,8 +302,8 @@ function onConn(c, outgoing) {
     conns.set(s, c);
     if (!approvalMode) { markOk(c); return; }
     // Host approval mode: the host proves who it is with a signature over this connection's fresh challenge.
-    if (isHost && c.__peerNonce) send(c, 9, await hostSign('host|' + myId() + '|' + c.peer + '|' + hex(c.__peerNonce)));
-    else if (!isHost) send(c, 10, json({ name: myName }));
+    if (isHost) await sendProof(c);
+    else send(c, 10, json({ name: myName }));
     if (vouched.has(s) && selfOk) markOk(c);
   };
   const hello = async () => c.send(await seal(2, c.__nonce, c));
@@ -305,7 +312,7 @@ function onConn(c, outgoing) {
   c.on('data', async (d) => {
     try {
       const [type, pt] = await open(d, c);
-      if (type === 2) { c.__peerNonce = pt; c.send(await seal(3, pt, c)); return; }
+      if (type === 2) { c.__peerNonce = pt; c.send(await seal(3, pt, c)); if (c.__authed && isHost) sendProof(c); return; }
       if (type === 3) {
         if (c.__authed) return;
         if (pt.length === 16 && pt.every((x, i) => x === c.__nonce[i])) await admit();
@@ -318,7 +325,7 @@ function onConn(c, outgoing) {
         if (approvalMode && !isHost && await hostVerify(pt, 'host|' + c.peer + '|' + myId() + '|' + hex(c.__nonce))) { c.__host = true; if (selfOk) markOk(c); }
         return;
       }
-      if (type === 10) { if (isHost && !c.__ok) showKnock(s, String(JSON.parse(dec.decode(pt)).name || '').slice(0, 24) || 'Guest ' + (s + 1)); return; }
+      if (type === 10) { if (isHost && !c.__ok) { sendProof(c); showKnock(s, String(JSON.parse(dec.decode(pt)).name || '').slice(0, 24) || 'Guest ' + (s + 1)); } return; }
       if (type === 11) { // only a proven host may approve people
         if (!c.__host) return;
         const m = JSON.parse(dec.decode(pt));
@@ -380,6 +387,9 @@ function sweep() {
   if (!peer || peer.destroyed || me < 0) return;
   if (peer.disconnected) { try { peer.reconnect(); } catch (e) { /* retry */ } return; }
   broadcast(7, new Uint8Array(1), true);
+  if (approvalMode && !selfOk) for (const c of conns.values()) if (c.__authed && !c.__host) send(c, 10, json({ name: myName }));
+  let old = false; for (const c of conns.values()) if (c.__ok && !c.__peerOk && Date.now() - (c.__okAt || Date.now()) > 15000) old = true;
+  if (old !== !!window.__pr.oldPeer) { window.__pr.oldPeer = old; updateMode(); }
   for (const c of conns.values()) if (Date.now() - (c.__last || 0) > 15000) c.close();
   for (let j = 0; j < MAX; j++) {
     if (j === me) continue;
@@ -511,7 +521,7 @@ async function start(useCam) {
   $('#file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) sendFile(f); };
   $('#attach').onclick = () => $('#file').click();
   $('#copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(inviteLink()); $('#copy').textContent = 'Link copied'; setTimeout(() => { $('#copy').textContent = 'Copy invite link'; }, 2000); };
-  $('#mode').textContent = approvalMode ? (isHost ? 'You are the host. Approval on' : 'Approval on') : 'Open room: anyone with the link joins';
+  updateMode();
   $('#mode').className = approvalMode ? 'on' : 'open';
   setTracks();
   if (!selfOk) { $('#wait').hidden = false; status('Waiting for the host'); }
