@@ -1,7 +1,7 @@
 import { Peer } from 'peerjs';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v6';
+const VERSION = 'v7';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -402,6 +402,14 @@ function onConn(c, outgoing) {
   });
 }
 
+let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }];
+// Relay (TURN) is a fallback only: the browser still tries a direct path first. Short-lived credentials come from our own server.
+function loadIce() {
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 2500);
+  return fetch('/turn', { signal: ac.signal, cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((j) => {
+    if (j && Array.isArray(j.iceServers) && j.iceServers.length) { iceServers = iceServers.concat(j.iceServers); window.__pr.relay = true; }
+  }).catch(() => {}).then(() => clearTimeout(tm));
+}
 function register(slot) {
   if (slot >= MAX) {
     window.__pr.fullTries = (window.__pr.fullTries || 0) + 1;
@@ -409,9 +417,11 @@ function register(slot) {
     status('Room looks full. If you just refreshed, waiting a few seconds for your old spot to free up...');
     setTimeout(() => register(0), 6000); return;
   }
-  const p = new Peer(roomId + '-' + slot, { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
-  p.on('disconnected', () => { if (me >= 0 && !p.destroyed) { status('Reconnecting...'); try { p.reconnect(); } catch (e) { /* next sweep retries */ } } });
+  const sg = window.__pr.sig = window.__pr.sig || { tries: 0, err: '', t0: Date.now() }; sg.tries++; sg.slot = slot;
+  const p = new Peer(roomId + '-' + slot, { debug: 0, config: { iceServers: iceServers } });
+  p.on('disconnected', () => { sg.err = 'disconnected@' + Math.round((Date.now() - sg.t0) / 1000) + 's'; if (me >= 0 && !p.destroyed) { status('Reconnecting...'); try { p.reconnect(); } catch (e) { /* next sweep retries */ } } });
   p.on('error', (e) => {
+    if (e.type !== 'peer-unavailable') sg.err = e.type + '@' + Math.round((Date.now() - sg.t0) / 1000) + 's';
     if (e.type === 'unavailable-id' && me < 0) { p.destroy(); register(slot + 1); }
     else if (e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error' || e.type === 'socket-closed') status('Network problem, retrying...');
     else if (e.type !== 'peer-unavailable') status('Connection problem: ' + e.type);
@@ -575,7 +585,7 @@ async function start(useCam) {
   setTracks();
   if (!selfOk) { $('#wait').hidden = false; status('Waiting for the host'); }
   if (expiryMin) setInterval(() => { if (Date.now() / 60000 > expiryMin) wipe('This room expired. Chat and files were cleared.'); }, 10000);
-  register(0);
+  loadIce().then(() => register(0));
   setInterval(sweep, 4000); setInterval(health, 1000);
   document.addEventListener('click', () => { for (const b of tiles.values()) { const v = b.querySelector('video'); if (v.paused) tryPlay(v, b); } }, true);
   setInterval(refresh, 1000);
@@ -637,7 +647,7 @@ function candOf(pc, holder) {
   }).catch(() => {});
 }
 function diagText() {
-  const L = [APP_NAME + ' ' + VERSION + ' sig:' + (peer ? (peer.open ? 'ok' : peer.disconnected ? 'down' : 'wait') : 'none') + ' slot:' + me + (isHost ? ' host' : '') + (approvalMode ? ' approval' : ' open') + (approvalMode && !isHost ? (selfOk ? ' admitted' : ' not-admitted') : '')];
+  const L = [APP_NAME + ' ' + VERSION + ' sig:' + (peer ? (peer.open ? 'ok' : peer.disconnected ? 'down' : 'wait') : 'none') + ' slot:' + me + (window.__pr.sig ? ' tries:' + window.__pr.sig.tries + (window.__pr.sig.err ? ' err:' + window.__pr.sig.err : '') : '') + (window.__pr.relay ? ' relay:on' : ' relay:off') + (isHost ? ' host' : '') + (approvalMode ? ' approval' : ' open') + (approvalMode && !isHost ? (selfOk ? ' admitted' : ' not-admitted') : '')];
   for (const [s, c] of conns) { const pc = c.peerConnection; L.push('data' + s + ': ' + (c.open ? 'open' : 'closed') + ' ice=' + (pc ? pc.iceConnectionState : '-') + ' auth=' + (c.__authed ? 1 : 0) + ' ok=' + (c.__ok ? 1 : 0) + ' via=' + (c.__cand || '?')); }
   for (const [s, c] of calls) { const pc = c.peerConnection; L.push('media' + s + ': ice=' + (pc ? pc.iceConnectionState : '-') + ' via=' + (c.__cand || '?')); }
   if (!conns.size) L.push('no peers connected yet');
