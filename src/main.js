@@ -75,7 +75,9 @@ function addVideo(slot, stream, isLocal) {
     $('#videos').appendChild(box); videos.set(slot, box);
   }
   const v = box.querySelector('video');
-  v.srcObject = stream; v.muted = !!isLocal;
+  v.srcObject = stream; v.muted = !!isLocal; v.style.borderColor = colors[slot % 4]; v.style.borderWidth = '3px'; v.style.borderStyle = 'solid';
+  v.onloadedmetadata = () => v.play().catch(() => {});
+  setTimeout(() => { if (v.paused) v.play().catch(() => {}); }, 1500);
   box.querySelector('figcaption').textContent = isLocal ? 'You' : 'Guest ' + (slot + 1);
   v.play().catch(() => {});
 }
@@ -138,8 +140,15 @@ function onConn(c, outgoing) {
 }
 
 function register(slot) {
-  if (slot >= MAX) { status('Room is full (4 people max).'); return; }
-  const p = new Peer(roomId + '-' + slot, { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] } });
+  if (slot >= MAX) {
+    // All 4 ids look taken. After a refresh the broker can hold the old id for a while, so wait and retry.
+    window.__pr.fullTries = (window.__pr.fullTries || 0) + 1;
+    if (window.__pr.fullTries > 12) { status('Room is full (4 people max).'); return; }
+    status('Room looks full. If you just refreshed, waiting a few seconds for your old spot to free up...');
+    setTimeout(() => register(0), 6000); return;
+  }
+  const p = new Peer(roomId + '-' + slot, { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
+  p.on('disconnected', () => { if (me >= 0 && !p.destroyed) { try { p.reconnect(); } catch (e) { /* retry on next event */ } } });
   p.on('error', (e) => {
     if (e.type === 'unavailable-id' && me < 0) { p.destroy(); register(slot + 1); }
     else if (e.type !== 'peer-unavailable') status('Connection problem: ' + e.type);
