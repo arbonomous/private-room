@@ -1,0 +1,29 @@
+import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8130);
+const BASE = process.env.URL0 || 'http://localhost:8130/';
+const b = await chromium.launch({ args: ['--no-sandbox', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
+const p = await (await b.newContext()).newPage(); await p.goto(BASE); await p.click('#create'); await p.click('#nocam'); await p.waitForTimeout(1200);
+const stub = (r) => r.fulfill({ contentType: 'text/javascript', body: `export const gpuInfo=async()=>({ok:true,f16:false});export const hasModel=()=>true;export const loadModel=async(id,cb)=>{cb('x',1)};export const ask=async(m,cb)=>{const t=window.__reply;cb(t);return t};export const stop=()=>{}` });
+await p.route('**/ai.js', stub);
+const setDoc = (c) => p.evaluate((c) => { const t = window.__pr.doc.getText('code'); t.delete(0, t.length); t.insert(0, c); }, c);
+const run = async () => { await p.click('#run'); await p.waitForTimeout(1500); return { log: await p.textContent('#pvlog'), frame: await p.frameLocator('#frame').locator('body').innerText().catch(() => 'ERR'), canvas: await p.frameLocator('#frame').locator('canvas').count() }; };
+const results = [];
+const check = (name, ok, extra) => { results.push(ok); console.log(ok ? 'PASS' : 'FAIL', name, extra || ''); };
+const FULL = `<!DOCTYPE html><html><head><title>Snake</title><style>body{margin:0;background:#111}canvas{background:#000}</style></head><body><h3 id="s">Score: 0</h3><canvas id="c" width="200" height="200"></canvas><script>
+const ctx=document.getElementById('c').getContext('2d');let hi=localStorage.getItem('hi')||0;localStorage.setItem('hi',5);let x=0;
+function loop(){ctx.fillStyle='#0f0';ctx.fillRect(x%200,10,10,10);x+=2;requestAnimationFrame(loop)}loop();document.getElementById('s').textContent='Score: 0 Hi: '+localStorage.getItem('hi');alert('hi');<\/script></body></html>`;
+await setDoc(FULL); let r = await run(); check('full HTML game with canvas+localStorage+alert', r.canvas === 1 && /Hi: 5/.test(r.frame) && !/Error/.test(r.log), r.log.slice(0, 120));
+await setDoc(`const c=document.createElement('canvas');c.width=100;c.height=100;document.body.appendChild(c);const g=c.getContext('2d');g.fillRect(0,0,50,50);document.body.append('js only ok');`); r = await run(); check('JS-only game', r.canvas === 1 && /js only ok/.test(r.frame), r.log.slice(0, 100));
+await setDoc(`<h1>cdn game</h1><script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"><\/script><script>document.title='x'<\/script>`); r = await run(); check('external script shows a blocked message', /Blocked/.test(r.log), r.log.slice(0, 160));
+await setDoc(`function (`); r = await run(); check('syntax error is shown', /Error in your code/.test(r.log), r.log.slice(0, 120));
+await setDoc(`undefinedFunction();`); r = await run(); check('runtime error is shown', /Error in your code/.test(r.log), r.log.slice(0, 120));
+await setDoc(``); r = await run(); check('empty editor message', /Nothing to run/.test(r.log));
+// AI reply paths: 3 separate blocks, and a truncated reply
+const propose = async (reply) => { await p.evaluate((x) => { window.__reply = x; }, reply); await p.click('#aiload'); await p.waitForTimeout(300); await p.fill('#aiq', 'q'); await p.click('#aiask'); await p.waitForTimeout(300); await p.click('#aiins'); await p.waitForTimeout(300); };
+await setDoc('');
+await propose('Here is your game:\n```html\n<canvas id="g" width="120" height="80"></canvas>\n```\n```css\ncanvas{border:2px solid red}\n```\n```javascript\ndocument.getElementById("g").getContext("2d").fillRect(5,5,30,30);document.body.append("three blocks ok")\n```\nEnjoy');
+await p.click('text=Accept (insert at my cursor)'); await p.waitForTimeout(600); r = await run(); check('AI reply with html+css+js blocks combines and runs', r.canvas === 1 && /three blocks ok/.test(r.frame), r.log.slice(0, 120));
+await setDoc('');
+await propose('```html\n<body><h1>cut off</h1><script>document.body.append("truncated ok");');
+await p.click('text=Accept (insert at my cursor)'); await p.waitForTimeout(600); const d = await p.evaluate(() => window.__pr.doc.getText('code').toString()); check('truncated reply has no stray fence', !d.includes('```'), JSON.stringify(d).slice(0, 80));
+const ok = results.every(Boolean); console.log(ok ? 'GAME PASS' : 'GAME FAIL'); await b.close(); srv.close(); process.exit(ok ? 0 : 1);
