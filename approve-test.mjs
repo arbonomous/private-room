@@ -45,6 +45,13 @@ ok('address cleared', (await B.evaluate(() => location.hash)) === '');
 // expiry
 const E = await mk('http://localhost:8172/#abcdefghijklmnop.e1'); await E.click('#nocam'); await wait(800);
 ok('expired link refused', await E.isVisible('#ended'));
+// guest arrives before the host is in the call: host must still get the knock when the host shows up
+const G = await mk('http://localhost:8172/'); await G.click('#create'); const gUrl = G.url(); const gInv = gUrl.replace(/\.s[\w-]+$/, '');
+const H = await mk(gInv); await H.click('#nocam'); await wait(6000);
+await G.click('#nocam'); await wait(12000);
+ok('late host still gets the knock', (await G.textContent('#knocks')).includes('wants to join') && (await G.textContent('#mode')).includes('1 waiting'));
+await G.click('.knock button:first-of-type'); await wait(9000);
+ok('guest let in after host arrives', !(await H.isVisible('#wait')));
 const F = await mk('http://localhost:8172/'); await F.uncheck('#approve'); await F.click('#create'); await F.click('#nocam'); await wait(1500);
 ok('open room labelled', (await F.textContent('#mode')).includes('Open room'));
 console.log(fail ? 'FAILED ' + fail : 'ALL PASS'); await b.close(); srv.close(); process.exit(fail ? 1 : 0);
