@@ -1,7 +1,7 @@
 import { Peer } from 'peerjs';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v5';
+const VERSION = 'v6';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -605,7 +605,7 @@ boot();
   const build = () => {
     const w = (document.querySelector('input[name=fbw]:checked') || {}).value || '';
     const o = { worked: w, text: q('#fbtext').value.trim().slice(0, 1500) };
-    if (q('#fbdev').checked) { o.app = APP_NAME + ' ' + VERSION; o.device = (navigator.userAgent || '').slice(0, 160); o.screen = window.screen.width + 'x' + window.screen.height; }
+    if (q('#fbdev').checked) { o.diag = diagText().slice(0, 600); o.app = APP_NAME + ' ' + VERSION; o.device = (navigator.userAgent || '').slice(0, 160); o.screen = window.screen.width + 'x' + window.screen.height; }
     return o;
   };
   const prev = () => { q('#fbprev').textContent = JSON.stringify(build(), null, 1); };
@@ -623,3 +623,24 @@ boot();
     } catch (e) { q('#fbmsg').textContent = 'Could not send. Check your connection.'; q('#fbsend').disabled = false; }
   };
 })();
+
+// ---- connection diagnostics: one screenshot shows where a link stalls. No room id, key or names. ----
+function candOf(pc, holder) {
+  if (!pc || !pc.getStats) return;
+  pc.getStats().then((rep) => {
+    let sel = null; const cands = {};
+    rep.forEach((r) => { if (r.type === 'local-candidate' || r.type === 'remote-candidate') cands[r.id] = r; });
+    rep.forEach((r) => { if (r.type === 'transport' && r.selectedCandidatePairId) sel = rep.get(r.selectedCandidatePairId); });
+    if (!sel) rep.forEach((r) => { if (r.type === 'candidate-pair' && (r.selected || (r.nominated && r.state === 'succeeded'))) sel = r; });
+    const l = sel && cands[sel.localCandidateId], m = sel && cands[sel.remoteCandidateId];
+    holder.__cand = sel ? (l ? l.candidateType : '?') + '>' + (m ? m.candidateType : '?') : 'none';
+  }).catch(() => {});
+}
+function diagText() {
+  const L = [APP_NAME + ' ' + VERSION + ' sig:' + (peer ? (peer.open ? 'ok' : peer.disconnected ? 'down' : 'wait') : 'none') + ' slot:' + me + (isHost ? ' host' : '') + (approvalMode ? ' approval' : ' open') + (approvalMode && !isHost ? (selfOk ? ' admitted' : ' not-admitted') : '')];
+  for (const [s, c] of conns) { const pc = c.peerConnection; L.push('data' + s + ': ' + (c.open ? 'open' : 'closed') + ' ice=' + (pc ? pc.iceConnectionState : '-') + ' auth=' + (c.__authed ? 1 : 0) + ' ok=' + (c.__ok ? 1 : 0) + ' via=' + (c.__cand || '?')); }
+  for (const [s, c] of calls) { const pc = c.peerConnection; L.push('media' + s + ': ice=' + (pc ? pc.iceConnectionState : '-') + ' via=' + (c.__cand || '?')); }
+  if (!conns.size) L.push('no peers connected yet');
+  return L.join('\n');
+}
+setInterval(() => { for (const c of conns.values()) candOf(c.peerConnection, c); for (const c of calls.values()) candOf(c.peerConnection, c); const t = diagText(); const a = document.querySelector('#diag'), w = document.querySelector('#diagw'); if (a) a.textContent = t; if (w) w.textContent = t; }, 2000);
