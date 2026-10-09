@@ -1,4 +1,4 @@
-# mut3 (working name)
+# mut3d (working name)
 
 The repo is still called private-room.
 
