@@ -1,0 +1,11 @@
+import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
+const srv = http.createServer((q, r) => { r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html')); }).listen(8176);
+const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox', '--allow-loopback-in-peer-connection'] });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms)); let fail = 0; const ok = (n, c) => { console.log(c ? 'PASS' : 'FAIL', n); if (!c) fail++; };
+const mk = async (u) => { const p = await (await b.newContext()).newPage(); p.on('pageerror', (e) => console.log('ERR', e.message)); await p.goto(u); return p; };
+const A = await mk('http://localhost:8176/'); await A.click('#create'); const url = A.url(); await A.click('#nocam');
+const B = await mk(url); await B.click('#nocam'); await wait(8000);
+const t = await A.evaluate(() => document.querySelector('#diag').textContent); console.log(t);
+ok('diag has version, data and ice', /v6/.test(t) && /data\d: open ice=(connected|completed)/.test(t) && /via=\w+>\w+/.test(t));
+const w = await B.evaluate(() => document.querySelector('#diagw').textContent); console.log('wait-card:', w.split('\n')[0]);
+await b.close(); srv.close(); process.exit(fail ? 1 : 0);
