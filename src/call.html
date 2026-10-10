@@ -23,7 +23,7 @@ details.how{margin-top:22px;text-align:left;color:var(--muted);font-size:14px}de
 .top button{padding:8px 12px;min-height:44px}
 #main{flex:1 1 0;min-height:0;display:flex;position:relative}#main>#videos{margin-right:0}
 #videos{flex:1 1 0;min-width:0;min-height:0;display:grid;gap:8px;grid-template-columns:1fr;grid-template-rows:repeat(auto-fit,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);overflow:hidden}
-#videos[data-n="2"],#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}
+#videos[data-n="2"],#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}#videos[data-n="5"],#videos[data-n="6"]{grid-template-columns:1fr 1fr 1fr}
 figure{margin:0;position:relative;min-height:0;min-width:0;background:#000;border-radius:14px;overflow:hidden}
 figure video{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;height:100%;object-fit:cover;border:3px solid var(--line);border-radius:14px;background:#000;pointer-events:none}
 figure{cursor:pointer}figure.talk::after{content:"";position:absolute;inset:0;border:4px solid #B9F27C;border-radius:14px;z-index:3;pointer-events:none}
@@ -48,7 +48,7 @@ figure .st{position:absolute;left:8px;right:8px;top:8px;color:#F5F8F2;background
 #chatbtn.ping{outline:2px solid var(--good)}
 #moredet{font-size:13px;color:var(--muted);padding:6px 4px}#audit{line-height:1.6}
 @media(max-width:720px){#main{flex-direction:column}#main>#chatpanel{position:static;width:auto;flex:1 1 0;min-height:120px;margin-top:8px}#main.chat #videos{flex:0 0 clamp(150px,34%,280px);grid-template-columns:none!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)!important}#main.chat figcaption{font-size:11px;left:4px;bottom:4px;padding:1px 5px}#main.chat figure .st{font-size:11px;padding:2px 6px}#share{display:none}.top h1{font-size:16px}}
-@media(max-width:720px) and (orientation:portrait){#videos[data-n="2"]{grid-template-columns:1fr}#videos[data-n="3"],#videos[data-n="4"]{grid-template-columns:1fr 1fr}}
+@media(max-width:720px) and (orientation:portrait){#videos[data-n="2"]{grid-template-columns:1fr}#videos[data-n="3"],#videos[data-n="4"],#videos[data-n="5"],#videos[data-n="6"]{grid-template-columns:1fr 1fr}}
 </style></head>
 <body>
 <div id="err"></div>
