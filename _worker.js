@@ -29,6 +29,13 @@ export default {
         if ((await get(hk)) >= 20 || (await get(dk)) >= 600) return new Response('slow down', { status: 429 });
         const up = (k, ttl) => env.DB.prepare('INSERT INTO rl (k,n,exp) VALUES (?,1,?) ON CONFLICT(k) DO UPDATE SET n=n+1').bind(k, now + ttl).run();
         await up(hk, 3700000); await up(dk, 90000000);
+        // Free metered trial has a monthly quota. When it is nearly used up, say so instead of handing out credentials that will not work.
+        if (!globalThis.__tu || globalThis.__tu.exp < now) {
+          let busy = false;
+          try { const u2 = await fetch('https://arbonomous-mut3d.metered.live/api/v1/turn/current_usage?secretKey=' + encodeURIComponent(env.TURN_SECRET)); if (u2.ok) { const j2 = await u2.json(); busy = j2.quotaInGB > 0 && j2.usageInGB >= j2.quotaInGB * 0.95; } } catch (e) { /* fail open */ }
+          globalThis.__tu = { exp: now + 300000, busy };
+        }
+        if (globalThis.__tu.busy) return new Response('{"busy":true,"iceServers":[]}', { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
         if (!globalThis.__turn || globalThis.__turn.exp < now) {
           const r = await fetch('https://arbonomous-mut3d.metered.live/api/v1/turn/credential?secretKey=' + encodeURIComponent(env.TURN_SECRET), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ expiryInSeconds: 1800, label: 'mut3d' }) });
           if (!r.ok) return off();
