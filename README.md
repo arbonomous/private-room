@@ -61,4 +61,14 @@ More menu > Voice disguise: Off (default), Deeper, Higher, Robot. It runs in you
 
 ## Face disguise
 
-More menu > Face disguise: Off (default, the untouched camera), Blur, Pixelate, Emoji cover. It draws your camera onto a small canvas (480 px wide, 15 fps, to save battery) in your own browser and sends that instead. Nothing is uploaded. These effects cover the whole picture; they are not face-tracked. It is a disguise, not anonymity: your voice, background and room can still identify you. If the browser can't capture a canvas, you get a chat note and the camera stays as is. `face-test.mjs` checks it.
+More menu > Face disguise: Off (default, the untouched camera), Blur, Pixelate, Mask, Avatar. Everything runs in your own browser on your camera before anything is sent. Nothing is uploaded.
+
+- Blur and Pixelate cover the whole picture.
+- Mask and Avatar follow your face using Google's MediaPipe Face Landmarker, served from this site (`/mp/`), not a third-party CDN. The mask is drawn over a pixelated picture. The avatar replaces the whole picture with a cartoon face that follows your head, blinks and opens its mouth when you do. The files are about 17 MB and load only when you pick one of these. Until they are ready, you see a blur, never your raw camera. Face finding runs about 10 times a second on the CPU to save battery; drawing is capped at 15 fps and 480 px wide.
+- It is a disguise, not anonymity: your voice, background and room can still identify you. If the browser can't capture a canvas or the files can't load, you get a chat note and a fallback.
+
+Licenses: `@mediapipe/tasks-vision` 1.1.0 is Apache-2.0 (checked in its package.json). The `face_landmarker.task` model is published by Google alongside it; its model card license was not independently verified here. The big files are not committed: run `./fetch-mediapipe.sh` (pinned version, SHA-256 checked) before deploying. Tests: `face-test.mjs`; `face-real-test.mjs` runs a real face photo through the avatar and mask (needs `/tmp/face.y4m`).
+
+## Speaker highlight, enlarge, install
+
+The person who is talking gets a green outline (measured from the audio you already receive, in your browser). Tap a tile to enlarge it, tap again to go back. On phones, "Add to Home Screen" installs mut3d as an app. The service worker (`public/sw.js`) keeps only the app page and the face-tracking files so it opens offline. It never stores chat, files, feedback, relay credentials or room keys (the key is after the # in the link and is never part of a request).
