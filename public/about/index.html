@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>mut3d - Link-only calls and chat</title>
+<meta name="description" content="Link-only encrypted video calls and chat. No account, no phone number, no app, nothing stored. A small free project by arbonomous. Not independently audited.">
+<meta name="theme-color" content="#131A17">
+<link rel="icon" href="/icon-192.png">
+<style>
+*{box-sizing:border-box}
+:root{--bg:#131A17;--card:#1b2420;--line:#2b3731;--text:#F5F8F2;--muted:#9fb0a6;--signal:#B9F27C}
+@media (prefers-color-scheme:light){:root{--bg:#F5F8F2;--card:#fff;--line:#cfd9d1;--text:#131A17;--muted:#4d5f54;--signal:#2f6f4f}.btn:not(.alt){color:#F5F8F2}}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:17px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}
+main{max-width:680px;margin:0 auto;padding:40px 20px 60px}
+.logo{width:72px;height:72px;display:block;margin:0 auto 14px}
+.hero{text-align:center;padding:28px 0 10px}
+h1{font-size:44px;margin:0;color:var(--signal);letter-spacing:-1px}
+.tag{font-size:22px;margin:6px 0 4px}
+.by{color:var(--muted);font-size:14px;margin:0 0 22px}
+.btn{display:inline-block;background:var(--signal);color:#131A17;font-weight:700;text-decoration:none;border-radius:14px;padding:15px 30px;font-size:18px;margin:4px}
+.btn.alt{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500}
+h2{font-size:22px;margin:40px 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:6px 18px;margin:10px 0}
+ol,ul{padding-left:22px;margin:10px 0}li{margin:7px 0}
+p{color:var(--muted);margin:8px 0}
+b,strong{color:var(--text)}
+a{color:var(--signal)}
+.warn{border-left:4px solid var(--signal)}
+footer{margin-top:48px;color:var(--muted);font-size:14px;text-align:center}
+</style></head><body><main>
+<div class="hero">
+<svg class="logo" viewBox="0 0 100 100" role="img" aria-label="mut3d logo"><rect width="100" height="100" rx="24" fill="#131A17"/><path d="M26 76V40a24 24 0 0 1 48 0v36" fill="none" stroke="#F5F8F2" stroke-width="6" stroke-linecap="round"/><circle cx="50" cy="52" r="9" fill="#B9F27C"/></svg>
+<h1>mut3d</h1>
+<p class="tag">Link-only calls and chat.</p>
+<p class="by">by arbonomous</p>
+<a class="btn" href="/">Try it now</a><a class="btn alt" href="https://github.com/arbonomous/private-room">Source code</a>
+<p>Free. No account. No phone number. Nothing to install.</p>
+</div>
+
+<h2>How it works</h2>
+<div class="card"><ol>
+<li><b>Make a room.</b> One tap. You get a link.</li>
+<li><b>Send the link</b> to the people you want (share sheet, QR code or copy).</li>
+<li><b>Let them in.</b> Each person knocks and you approve. Lock the room when everyone is here.</li>
+</ol></div>
+
+<h2>What you get</h2>
+<div class="card"><ul>
+<li>Video and voice calls, text chat, file sharing, up to 4 people.</li>
+<li>Calls go straight between devices and are encrypted in the browser. The server only helps people find each other.</li>
+<li>Nothing is stored: no accounts, no call history, no recordings.</li>
+<li>Optional privacy tools: voice disguise, face mask, blur background only, dark or light theme.</li>
+<li>An "End room for everyone" button that wipes chat and files from every open tab.</li>
+</ul></div>
+
+<h2>Honest limits</h2>
+<div class="card warn"><ul>
+<li><b>The cryptography has not been independently audited.</b> This is a small project, not a replacement for Signal or any audited tool. Do not use it where your safety depends on it.</li>
+<li>Anyone with the full link can knock. Share it only over a channel you trust.</li>
+<li>People in a call can see each other's network addresses, because devices connect directly. A small free relay is a fallback and may run out.</li>
+<li>Host approval and the end-room button run in each person's browser. Someone with modified code could ignore them, and anyone can screenshot or record.</li>
+<li>Tested in lab browsers, not on every phone yet. Older phones may run warm with the face mask or blur on.</li>
+</ul></div>
+<p>The full list is in the <a href="https://github.com/arbonomous/private-room#honest-limits">README</a>. The code is open so you can check what it does.</p>
+
+<h2>Tell us what broke</h2>
+<p>Open the app and tap <b>Send feedback</b>. You see the exact text before it is sent, and it never includes your room link, names or chat.</p>
+<p style="text-align:center"><a class="btn" href="/">Try it now</a></p>
+
+<footer>mut3d is a working name. A free project by arbonomous. No tracking, no cookies, no ads.</footer>
+</main></body></html>
