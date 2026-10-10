@@ -1,7 +1,8 @@
 import { Peer } from 'peerjs';
+import qrcode from 'qrcode-generator';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v9';
+const VERSION = 'v10';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -426,20 +427,73 @@ function ready(c) {
   sysMsg(nameOf(c.__slot) + ' joined');
 }
 function markOk(c) { if (c.__ok) return; c.__ok = true; c.__okAt = Date.now(); send(c, 13, new Uint8Array(1)); ready(c); }
+// ---- invite: share sheet, QR, optional short link ----
+// The room key lives after the # and never reaches a server. A short link keeps that true: the full link is encrypted in this browser
+// with a random 12-letter code that stays after the # of the short link, so our server only stores ciphertext for 24 hours.
+const B32 = 'abcdefghijklmnopqrstuvwxyz234567';
+const rndStr = (n) => [...crypto.getRandomValues(new Uint8Array(n))].map((x) => B32[x % 32]).join('');
+async function pbKey(pass, salt) { const k = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']); return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']); }
+async function sealLink(text, pass) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await pbKey(pass, salt), enc.encode(text)));
+  const out = new Uint8Array(28 + ct.length); out.set(salt, 0); out.set(iv, 16); out.set(ct, 28); return b64u(out);
+}
+async function openLink(c, pass) { const raw = unb64(c); return dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw.slice(16, 28) }, await pbKey(pass, raw.slice(0, 16)), raw.slice(28))); }
+async function makeShort() {
+  const pass = rndStr(12), full = inviteLink().split('#')[1];
+  const r = await fetch('/s', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ c: await sealLink(full, pass) }) });
+  if (!r.ok) throw new Error('short ' + r.status);
+  return location.origin + '/s/' + (await r.json()).id + '#' + pass;
+}
+async function resolveShort() {
+  const m = location.pathname.match(/^\/s\/([a-z2-7]{6,16})$/); if (!m) return;
+  const pass = location.hash.slice(1);
+  try {
+    const r = await fetch('/s/' + m[1] + '?j=1', { cache: 'no-store' }); if (!r.ok) throw new Error('gone');
+    history.replaceState(null, '', '/#' + await openLink((await r.json()).c, pass));
+  } catch (e) { history.replaceState(null, '', '/'); window.__pr.shortErr = String(e && e.message); const n = document.querySelector('#shortgone'); if (n) n.hidden = false; }
+}
+function drawQr(text) {
+  const cv = $('#qr'); const q = qrcode(0, 'L'); q.addData(text); q.make();
+  const n = q.getModuleCount(), sc = Math.max(3, Math.floor(280 / (n + 8))), size = (n + 8) * sc; cv.width = cv.height = size;
+  const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, size, size); x.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) x.fillRect((c + 4) * sc, (r + 4) * sc, sc, sc);
+  window.__pr.qrModules = n;
+}
+let inviteUrl = '';
+function openInvite() {
+  inviteUrl = inviteLink(); $('#invurl').textContent = inviteUrl.length > 60 ? inviteUrl.slice(0, 28) + '...' + inviteUrl.slice(-14) : inviteUrl;
+  $('#invshare').hidden = !navigator.share; $('#invnote').textContent = approvalMode ? 'People who open this link ask to join and you let them in.' : 'Anyone with this link can join, so send it only to people you trust.';
+  $('#invshortnote').hidden = true; drawQr(inviteUrl); $('#invite').hidden = false;
+}
+async function copyText(t, btn, label) { try { await navigator.clipboard.writeText(t); } catch (e) { /* no clipboard */ } const o = btn.textContent; btn.textContent = label; setTimeout(() => { btn.textContent = o; }, 2000); }
+// ---- room lock (host only) ----
+let locked = false, lockedSeen = false;
+function setLock(v) {
+  locked = v; $('#lock').textContent = locked ? 'Unlock room' : 'Lock room';
+  if (locked) for (const k of [...knocks.keys()]) denyGuest(k, true);
+  broadcast(14, json({ locked })); updateMode();
+}
+function renderBulk() {
+  let b = $('#bulk');
+  if (knocks.size > 1 && isHost) {
+    if (!b) { b = document.createElement('div'); b.id = 'bulk'; b.className = 'knock'; const y = document.createElement('button'); y.textContent = 'Let everyone in'; const n = document.createElement('button'); n.textContent = 'Deny all'; n.className = 'alt'; b.append(y, n); $('#knocks').prepend(b); y.onclick = () => { for (const k of [...knocks.keys()]) admitGuest(k); }; n.onclick = () => { for (const k of [...knocks.keys()]) denyGuest(k); }; }
+  } else if (b) b.remove();
+}
 function showKnock(s, name) {
   if (knocks.has(s)) return;
   const row = document.createElement('div'); row.className = 'knock';
   const t = document.createElement('span'); t.textContent = (name || 'Someone') + ' wants to join';
   const y = document.createElement('button'); y.textContent = 'Let in'; const n = document.createElement('button'); n.textContent = 'Deny'; n.className = 'alt';
-  row.append(t, y, n); $('#knocks').appendChild(row); knocks.set(s, row); alertKnock();
+  row.append(t, y, n); $('#knocks').appendChild(row); knocks.set(s, row); renderBulk(); alertKnock();
   y.onclick = () => admitGuest(s); n.onclick = () => denyGuest(s);
 }
 function updateMode() {
   const m = $('#mode'); if (!m) return;
-  m.textContent = (approvalMode ? (isHost ? 'You are the host. Approval on' : 'Approval on') : 'Open room: anyone with the link joins') + (knocks.size ? ' - ' + knocks.size + ' waiting to join' : '') + (window.__pr.oldPeer ? ' - a friend may be on an old version, refresh both phones' : '') + ' (' + VERSION + ')';
+  m.textContent = (approvalMode ? (isHost ? 'You are the host. Approval on' : 'Approval on') : 'Open room: anyone with the link joins') + (knocks.size ? ' - ' + knocks.size + ' waiting to join' : '') + ((locked || lockedSeen) ? ' - room locked' : '') + (window.__pr.oldPeer ? ' - a friend may be on an old version, refresh both phones' : '') + ' (' + VERSION + ')';
 }
 function alertKnock() { updateMode(); try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) { /* no vibration */ } document.title = '(' + knocks.size + ') Someone wants to join'; }
-function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } document.title = knocks.size ? '(' + knocks.size + ') Someone wants to join' : APP_NAME; updateMode(); }
+function clearKnock(s) { const r = knocks.get(s); if (r) { r.remove(); knocks.delete(s); } renderBulk(); document.title = knocks.size ? '(' + knocks.size + ') Someone wants to join' : APP_NAME; updateMode(); }
 async function sendProof(c) { if (isHost && c.__peerNonce && c.open) await send(c, 9, await hostSign('host|' + myId() + '|' + c.peer + '|' + hex(c.__peerNonce))); }
 function admitGuest(s) {
   const c = conns.get(s); clearKnock(s); if (!c || !c.__authed || !isHost) return;
@@ -449,7 +503,7 @@ function admitGuest(s) {
   for (const x of conns.values()) if (x !== c && x.__ok) send(x, 11, json({ slot: s, ok: true }));
   markOk(c);
 }
-function denyGuest(s) { const c = conns.get(s); clearKnock(s); if (!c) return; send(c, 11, json({ deny: true })); setTimeout(() => c.close(), 400); }
+function denyGuest(s, lk) { const c = conns.get(s); clearKnock(s); if (!c) return; send(c, 11, json(lk ? { deny: true, locked: true } : { deny: true })); setTimeout(() => c.close(), 400); }
 function onSelfApproved(msg, hostConn) {
   selfOk = true; $('#wait').hidden = true; status('In the call');
   (msg.members || []).forEach((m) => vouched.add(+m));
@@ -498,17 +552,18 @@ function onConn(c, outgoing) {
         if (approvalMode && !isHost && await hostVerify(pt, 'host|' + c.peer + '|' + myId() + '|' + hex(c.__nonce))) { c.__host = true; if (selfOk) markOk(c); }
         return;
       }
-      if (type === 10) { if (isHost && !c.__ok) { sendProof(c); showKnock(s, String(JSON.parse(dec.decode(pt)).name || '').slice(0, 24) || 'Guest ' + (s + 1)); } return; }
+      if (type === 10) { if (isHost && !c.__ok && locked) { send(c, 11, json({ deny: true, locked: true })); setTimeout(() => c.close(), 400); return; } if (isHost && !c.__ok) { sendProof(c); showKnock(s, String(JSON.parse(dec.decode(pt)).name || '').slice(0, 24) || 'Guest ' + (s + 1)); } return; }
       if (type === 11) { // only a proven host may approve people
         if (!c.__host) return;
         const m = JSON.parse(dec.decode(pt));
-        if (m.deny) { wipe('The host did not let you in.'); return; }
+        if (m.deny) { wipe(m.locked ? 'This room is locked by the host right now.' : 'The host did not let you in.'); return; }
         if (m.self) { onSelfApproved(m, c); return; }
         if (typeof m.slot === 'number') {
           if (m.ok) { vouched.add(m.slot); const x = conns.get(m.slot); if (selfOk && x && x.__authed) markOk(x); } else vouched.delete(m.slot);
         }
         return;
       }
+      if (type === 14) { if (c.__host) { lockedSeen = !!JSON.parse(dec.decode(pt)).locked; updateMode(); } return; }
       if (type === 13) { c.__peerOk = true; ready(c); return; }
       if (type === 8) { // end the room for everyone
         if (c.__ok && (!approvalMode || c.__host)) wipe('The room was ended by ' + (approvalMode ? 'the host' : nameOf(s)) + '. Chat and files were cleared from this tab.');
@@ -704,7 +759,15 @@ async function start(useCam) {
   $('#sendf').onsubmit = (e) => { e.preventDefault(); const t = $('#msg').value.trim(); if (!t) return; addMsg('You', t, true, me); broadcast(0, json({ t })); $('#msg').value = ''; };
   $('#file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) sendFile(f); };
   $('#attach').onclick = () => $('#file').click();
-  $('#copy').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(inviteLink()); $('#copy').textContent = 'Link copied'; setTimeout(() => { $('#copy').textContent = 'Copy invite link'; }, 2000); };
+  $('#copy').onclick = openInvite; $('#invclose').onclick = () => { $('#invite').hidden = true; };
+  $('#invcopy').onclick = () => copyText(inviteUrl, $('#invcopy'), 'Copied');
+  $('#invshare').onclick = () => { navigator.share({ title: 'Join my mut3d call', text: 'Join my call on mut3d', url: inviteUrl }).catch(() => {}); };
+  $('#invshort').onclick = async () => {
+    const b = $('#invshort'); b.disabled = true; b.textContent = 'Making it...';
+    try { inviteUrl = await makeShort(); $('#invurl').textContent = inviteUrl; drawQr(inviteUrl); $('#invshortnote').hidden = false; b.textContent = 'Short link ready'; window.__pr.shortUrl = inviteUrl; }
+    catch (e) { b.textContent = 'Short link unavailable'; window.__pr.shortErr = String(e && e.message); } finally { setTimeout(() => { b.disabled = false; b.textContent = 'Make a short link'; }, 3000); }
+  };
+  $('#lock').hidden = !isHost; $('#lock').onclick = () => setLock(!locked);
   updateMode();
   $('#mode').className = approvalMode ? 'on' : 'open';
   setTracks();
@@ -719,7 +782,8 @@ async function start(useCam) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) sweep(); });
 }
 
-function boot() {
+async function boot() {
+  await resolveShort();
   const hasKey = () => location.hash.length > 10;
   $('#create').onclick = async () => {
     const parts = [b64u(crypto.getRandomValues(new Uint8Array(16)))];
