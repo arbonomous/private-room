@@ -2,7 +2,7 @@ import { Peer } from 'peerjs';
 import qrcode from 'qrcode-generator';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v12';
+const VERSION = 'v13';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -628,6 +628,7 @@ let iceServers = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global
 function loadIce() {
   const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 2500);
   return fetch('/turn', { signal: ac.signal, cache: 'no-store' }).then((r) => r.ok ? r.json() : null).then((j) => {
+    if (j && j.busy) window.__pr.relayBusy = true;
     if (j && Array.isArray(j.iceServers) && j.iceServers.length) { iceServers = iceServers.concat(j.iceServers); window.__pr.relay = true; }
   }).catch(() => {}).then(() => clearTimeout(tm));
 }
@@ -695,6 +696,13 @@ function sweep() {
     onConn(peer.connect(roomId + '-' + j, { reliable: true }), true);
   }
   tuneSenders();
+  if (window.__pr.relayBusy && !window.__pr.busyWarned) {
+    for (const call of calls.values()) {
+      const pc = call.peerConnection; if (!pc) continue;
+      call.__seen = call.__seen || Date.now();
+      if (pc.iceConnectionState === 'failed' || ((pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'new') && Date.now() - call.__seen > 20000)) { window.__pr.busyWarned = true; sysMsg('The free relay is busy this month, so some connections on strict networks cannot be made. Try Wi-Fi instead of cellular (or the other way around).'); break; }
+    }
+  }
   if ($('#status').textContent === 'Reconnecting...' || $('#status').textContent === 'Network problem, retrying...') status('In the call');
 }
 
