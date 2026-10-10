@@ -5,9 +5,9 @@
 <p align="center"><a href="https://arbonomous-private-room.pages.dev"><b>Try it</b></a> &middot; <a href="https://arbonomous-private-room.pages.dev/about/">Landing page</a> &middot; <a href="docs/architecture.md">Architecture</a> &middot; <a href="docs/security-and-limits.md">Limits</a></p>
 
 <p align="center">
-<img src="docs/img/home.png" width="190" alt="Home screen, dark">
-<img src="docs/img/home-light.png" width="190" alt="Home screen, light">
-<img src="docs/img/call.png" width="400" alt="Two people in a call">
+<img src="docs/img/1-home.png" width="190" alt="Home screen, dark">
+<img src="docs/img/2-home-light.png" width="190" alt="Home screen, light">
+<img src="docs/img/3-call.png" width="400" alt="Two people in a call">
 </p>
 
 > **Status:** a small, working side project by [arbonomous](https://github.com/arbonomous). The cryptography has **not been independently audited**. It is not a replacement for Signal or any audited tool. See [honest limits](#honest-limits).
