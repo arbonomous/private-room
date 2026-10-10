@@ -1,27 +1,21 @@
 {
-  "name": "private-room",
+  "name": "mut3d",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Link-only calls and chat. Private video calls and chat for up to 4 people, no account, nothing stored.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node build.mjs",
+    "test": "for t in diag-test approve-test lock-test neg reflect rejoin-test voice-test fb-ui-test face-test bg-test call-test; do node tests/$t.mjs || exit 1; done"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@codemirror/lang-html": "^6.4.12",
-    "@codemirror/lang-javascript": "^6.2.5",
-    "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.14",
-    "@mlc-ai/web-llm": "^0.2.85",
-    "codemirror": "^6.0.2",
     "esbuild": "^0.28.2",
     "peerjs": "^1.5.5",
     "playwright": "^1.64.0",
-    "qrcode-generator": "^1.4.4",
-    "y-codemirror.next": "^0.3.6",
-    "y-protocols": "^1.0.7",
-    "yjs": "^13.6.33"
+    "qrcode-generator": "^1.4.4"
+  },
+  "private": true,
+  "homepage": "https://arbonomous-private-room.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arbonomous/mut3d.git"
   }
 }
