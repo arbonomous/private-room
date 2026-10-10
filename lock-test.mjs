@@ -1,0 +1,42 @@
+import { chromium } from 'playwright'; import http from 'http'; import fs from 'fs';
+const store = {};
+const srv = http.createServer((q, r) => {
+  const u = new URL(q.url, 'http://x');
+  if (u.pathname === '/s' && q.method === 'POST') { let d = ''; q.on('data', (x) => d += x); q.on('end', () => { const id = Math.random().toString(36).slice(2, 10).replace(/[^a-z]/g, 'a'); store[id] = JSON.parse(d).c; r.end(JSON.stringify({ id })); }); return; }
+  if (u.pathname.startsWith('/s/') && u.searchParams.get('j')) { const c = store[u.pathname.slice(3)]; if (!c) { r.statusCode = 404; return r.end('gone'); } return r.end(JSON.stringify({ c })); }
+  r.writeHead(200, { 'content-type': 'text/html' }); r.end(fs.readFileSync('dist/index.html'));
+}).listen(8173);
+const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox', '--allow-loopback-in-peer-connection'] });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+let fail = 0; const ok = (n, c) => { console.log(c ? 'PASS' : 'FAIL', n); if (!c) fail++; };
+const mk = async (u) => { const c = await b.newContext(); const p = await c.newPage(); p.on('dialog', (d) => d.accept()); await p.goto(u); return p; };
+const A = await mk('http://localhost:8173/'); await A.fill('#name', 'Ann'); await A.click('#create'); const inv = A.url().replace(/\.s[\w-]+$/, '');
+await A.click('#cam'); await wait(2500);
+await A.click('#copy'); await wait(500);
+ok('invite dialog open with QR', await A.isVisible('#invite') && await A.evaluate(() => window.__pr.qrModules) > 20);
+ok('share button hidden when API missing', !(await A.isVisible('#invshare')));
+ok('link shown', (await A.textContent('#invurl')).length > 20);
+await A.click('#invshort'); await wait(2500);
+const su = await A.evaluate(() => window.__pr.shortUrl); ok('short link made, key not in path', /\/s\/[a-z]+#[a-z2-7]{12}$/.test(su) && !su.includes(inv.split('#')[1].slice(0, 10)));
+ok('server saw no room key', !JSON.stringify(store).includes(inv.split('#')[1].slice(0, 10)));
+await A.click('#invclose');
+const S = await mk(su); await wait(1200);
+ok('short link resolves to room link', (await S.evaluate(() => location.hash)).slice(1, 12) === inv.split('#')[1].slice(0, 11));
+const BAD = await mk(su.replace(/#.*/, '#aaaaaaaaaaaa')); await wait(1200);
+ok('wrong code does not open', await BAD.isVisible('#shortgone'));
+await S.fill('#name', 'Bo'); await S.click('#nocam'); await wait(7000);
+const C = await mk(inv); await C.fill('#name', 'Cy'); await C.click('#nocam'); await wait(7000);
+ok('two knocks and bulk row', await A.locator('.knock').count() === 3 && (await A.textContent('#knocks')).includes('Let everyone in'));
+await A.click('#more'); await A.click('#lock'); await wait(2500);
+ok('lock clears waiting list', await A.locator('.knock').count() === 0);
+ok('waiting guests told locked', (await S.textContent('#ended')).includes('locked') || await S.isVisible('#ended'));
+const D = await mk(inv); await D.fill('#name', 'Di'); await D.click('#nocam'); await wait(7000);
+ok('new guest refused while locked', await D.isVisible('#ended') && (await D.textContent('#ended')).includes('locked'));
+ok('host mode shows locked', (await A.textContent('#mode')).includes('locked'));
+if (!(await A.isVisible('#lock'))) await A.click('#more'); await A.click('#lock'); await wait(500);
+await S.close(); await C.close(); await D.close(); await wait(5000); const E = await mk(inv); await E.fill('#name', 'Ed'); await E.click('#nocam'); await wait(14000);
+console.log('DBG', await A.textContent('#lock'), await A.textContent('#mode'), await A.evaluate(()=>window.__pr.conns.size), await E.evaluate(()=>location.hash.slice(0,8)+' '+['#wait','#ended','#join','#create'].map(s=>s+':'+!document.querySelector(s).hidden).join(' ')+' '+String(document.querySelector('#diag')&&document.querySelector('#diag').textContent).slice(0,300)));
+ok('after unlock guest knocks again', (await A.textContent('#knocks')).includes('Ed wants to join'));
+await A.click('.knock button:first-of-type'); await wait(8000);
+ok('admitted after unlock', !(await E.isVisible('#wait')));
+console.log(fail ? 'FAILED ' + fail : 'ALL PASS'); await b.close(); srv.close(); process.exit(fail ? 1 : 0);
