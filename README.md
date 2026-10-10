@@ -79,3 +79,8 @@ The person who is talking gets a green outline (measured from the audio you alre
 - **Lock room** (host, in More): refuses new knocks and clears the waiting list; guests already in stay. Enforced on the host's device. Unlock to accept knocks again.
 - **Waiting list**: each person waiting has Let in / Deny; with two or more, "Let everyone in" and "Deny all" appear.
 - Honest limit: lock and the waiting list live in the host's browser. If the host closes the tab, nobody is admitted.
+
+## Theme and background blur (v11)
+- **Theme**: Light/Dark button in More. Default is dark. The only thing stored on your device is the word `dark` or `light`.
+- **Blur background only**: new option in the face-effect list. A small person-cutout model (MediaPipe selfie segmenter, about 250 KB, run in your browser, served from our own origin) keeps you sharp and blurs what is behind you. It does NOT hide your face. Until the model loads, the whole picture is blurred, never the raw camera. The model's licence was not independently verified (same status as the face model).
+- Not yet tested on real phones: speed of the cutout on older iPhones. If it lags, use Blur or Pixelate.
