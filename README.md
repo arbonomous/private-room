@@ -72,3 +72,10 @@ Licenses: `@mediapipe/tasks-vision` 1.1.0 is Apache-2.0 (checked in its package.
 ## Speaker highlight, enlarge, install
 
 The person who is talking gets a green outline (measured from the audio you already receive, in your browser). Tap a tile to enlarge it, tap again to go back. On phones, "Add to Home Screen" installs mut3d as an app. The service worker (`public/sw.js`) keeps only the app page and the face-tracking files so it opens offline. It never stores chat, files, feedback, relay credentials or room keys (the key is after the # in the link and is never part of a request).
+
+## Invite, short link, room lock
+- **Invite** button: shows a QR code of the link, a Share button (phones that support the share sheet), and Copy. The QR is drawn in the browser with the MIT-licensed `qrcode-generator`; nothing is fetched.
+- **Short link** (optional, one tap): the full link is encrypted in your browser with a random 12-letter code. Our server stores only that ciphertext for 24 hours (D1, rate limited). The code lives after the `#` of the short link, so the server never sees the room key or the code. Anyone holding the short link can still join (same trust as the long link). Wrong code or expired: the page says so.
+- **Lock room** (host, in More): refuses new knocks and clears the waiting list; guests already in stay. Enforced on the host's device. Unlock to accept knocks again.
+- **Waiting list**: each person waiting has Let in / Deny; with two or more, "Let everyone in" and "Deny all" appear.
+- Honest limit: lock and the waiting list live in the host's browser. If the host closes the tab, nobody is admitted.
