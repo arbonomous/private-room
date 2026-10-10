@@ -44,6 +44,42 @@ export default {
         return new Response(JSON.stringify({ iceServers }), { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
       } catch (e) { return off(); }
     }
+    if (u.pathname === '/s' && req.method === 'POST') {
+      // Short invite links: stores only an AES-GCM ciphertext made in the browser. The unlock code stays in the link after the #. Kept 24 hours.
+      try {
+        if (!env.DB) return new Response('off', { status: 503 });
+        const sf = req.headers.get('sec-fetch-site'); if (sf && sf !== 'same-origin') return new Response('no', { status: 403 });
+        const raw = await req.text(); if (raw.length > 2000) return new Response('too big', { status: 413 });
+        let o; try { o = JSON.parse(raw); } catch { return new Response('bad', { status: 400 }); }
+        if (typeof o.c !== 'string' || !/^[A-Za-z0-9_-]{40,1500}$/.test(o.c)) return new Response('bad', { status: 400 });
+        await init(env.DB);
+        await env.DB.prepare('CREATE TABLE IF NOT EXISTS sl (id TEXT PRIMARY KEY, c TEXT, exp INTEGER)').run();
+        const now = Date.now();
+        const ip = req.headers.get('cf-connecting-ip') || 'x';
+        const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode((env.SALT || 's') + ip)))].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
+        const hk = 's:' + h + ':' + Math.floor(now / 3600000), dk = 'sd:' + Math.floor(now / 86400000);
+        const get = async (k) => ((await env.DB.prepare('SELECT n FROM rl WHERE k=?').bind(k).first()) || { n: 0 }).n;
+        if ((await get(hk)) >= 20 || (await get(dk)) >= 2000) return new Response('slow down', { status: 429 });
+        const up = (k, ttl) => env.DB.prepare('INSERT INTO rl (k,n,exp) VALUES (?,1,?) ON CONFLICT(k) DO UPDATE SET n=n+1').bind(k, now + ttl).run();
+        await up(hk, 3700000); await up(dk, 90000000);
+        await env.DB.prepare('DELETE FROM sl WHERE exp < ?').bind(now).run();
+        const A = 'abcdefghijklmnopqrstuvwxyz234567'; const id = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => A[x % 32]).join('');
+        await env.DB.prepare('INSERT INTO sl (id,c,exp) VALUES (?,?,?)').bind(id, o.c, now + 86400000).run();
+        return new Response(JSON.stringify({ id }), { status: 200, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+      } catch (e) { return new Response('err', { status: 500 }); }
+    }
+    if (u.pathname.startsWith('/s/') && req.method === 'GET') {
+      const id = u.pathname.slice(3);
+      if (u.searchParams.get('j') === '1') {
+        try {
+          if (!/^[a-z2-7]{6,16}$/.test(id) || !env.DB) return new Response('no', { status: 404 });
+          const r = await env.DB.prepare('SELECT c FROM sl WHERE id=? AND exp>?').bind(id, Date.now()).first();
+          if (!r) return new Response('gone', { status: 404, headers: { 'cache-control': 'no-store' } });
+          return new Response(JSON.stringify({ c: r.c }), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+        } catch (e) { return new Response('err', { status: 500 }); }
+      }
+      return env.ASSETS.fetch(new Request(new URL('/', req.url), req));
+    }
     if (u.pathname === '/fb' && req.method === 'POST') {
       try {
         if (!env.DB) return new Response('off', { status: 503 });
