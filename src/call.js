@@ -2,12 +2,12 @@ import { Peer } from 'peerjs';
 import qrcode from 'qrcode-generator';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v11';
+const VERSION = 'v12';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
 const enc = new TextEncoder(), dec = new TextDecoder();
-const MAX = 4;
+const MAX = 6;
 const MAXFILE = 25 * 1024 * 1024;
 const CHUNK = 16 * 1024;
 const b64u = (u) => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -58,7 +58,7 @@ const conns = new Map(), calls = new Map(), tiles = new Map(), info = new Map(),
 const stats = { sent: 0, recv: 0 };
 const colors = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f'];
 const state = { mic: true, cam: true };
-window.__pr = { conns, stats, Peer, info, forceSend: (type, o) => { for (const c of conns.values()) send(c, type, typeof o === 'string' ? enc.encode(o) : o); } };
+window.__pr = { conns, calls, stats, Peer, info, forceSend: (type, o) => { for (const c of conns.values()) send(c, type, typeof o === 'string' ? enc.encode(o) : o); } };
 
 window.addEventListener('error', (e) => { const x = document.getElementById('err'); if (x) { x.style.display = 'block'; x.textContent = 'Problem: ' + (e.message || e.error) + ' (' + (e.lineno || '') + ')'; } });
 window.addEventListener('unhandledrejection', (e) => { const x = document.getElementById('err'); if (x) { x.style.display = 'block'; x.textContent = 'Problem: ' + (e.reason && e.reason.message || e.reason); } });
@@ -634,7 +634,7 @@ function loadIce() {
 function register(slot) {
   if (slot >= MAX) {
     window.__pr.fullTries = (window.__pr.fullTries || 0) + 1;
-    if (window.__pr.fullTries > 12) { status('Room is full (4 people max).'); return; }
+    if (window.__pr.fullTries > 12) { status('Room is full (6 people max).'); return; }
     status('Room looks full. If you just refreshed, waiting a few seconds for your old spot to free up...');
     setTimeout(() => register(0), 6000); return;
   }
@@ -662,6 +662,21 @@ function register(slot) {
   });
 }
 // Keep trying to reach empty slots so late joiners, dropped links and flaky networks heal themselves.
+// Adaptive send quality: every peer gets its own copy of our video, so with more people we send each copy smaller.
+let tuned = '';
+function tuneSenders() {
+  const n = Math.max(1, calls.size);
+  const bps = n <= 1 ? 1200000 : n === 2 ? 700000 : n === 3 ? 450000 : 300000;
+  const scale = n <= 2 ? 1 : n === 3 ? 1.5 : 2;
+  const key = n + ':' + bps + ':' + scale; if (key === tuned) return; tuned = key;
+  for (const call of calls.values()) {
+    const pc = call.peerConnection; if (!pc) continue;
+    for (const snd of pc.getSenders()) {
+      if (!snd.track || snd.track.kind !== 'video' || !snd.getParameters) continue;
+      try { const p = snd.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}]; p.encodings[0].maxBitrate = bps; p.encodings[0].scaleResolutionDownBy = scale; snd.setParameters(p).catch(() => {}); } catch (e) { /* unsupported */ }
+    }
+  }
+}
 function sweep() {
   if (!peer || peer.destroyed || me < 0) return;
   if (peer.disconnected) { try { peer.reconnect(); } catch (e) { /* retry */ } return; }
@@ -679,6 +694,7 @@ function sweep() {
     lastTry.set(j, Date.now());
     onConn(peer.connect(roomId + '-' + j, { reliable: true }), true);
   }
+  tuneSenders();
   if ($('#status').textContent === 'Reconnecting...' || $('#status').textContent === 'Network problem, retrying...') status('In the call');
 }
 
