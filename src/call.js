@@ -2,7 +2,7 @@ import { Peer } from 'peerjs';
 import qrcode from 'qrcode-generator';
 
 const APP_NAME = 'mut3d'; // working name, change here only
-const VERSION = 'v10';
+const VERSION = 'v11';
 const $ = (s) => document.querySelector(s);
 document.title = APP_NAME;
 document.querySelectorAll('.appname').forEach((e) => { e.textContent = APP_NAME; });
@@ -226,6 +226,34 @@ function mpLoad() {
   }).catch((e) => { window.__pr.mp = 'failed:' + (e && e.message); face.loading = null; throw e; });
   return face.loading;
 }
+// Background blur: a small person-cutout model (about 250 KB) runs in this browser. Only the background is blurred; your face stays visible.
+function segLoad() {
+  if (face.seg) return Promise.resolve(face.seg);
+  if (face.segLoading) return face.segLoading;
+  const base = '/mp/';
+  face.segLoading = import(/* @vite-ignore */ base + 'vision_bundle.mjs').then(async (mod) => {
+    const fs = await mod.FilesetResolver.forVisionTasks(base + 'wasm');
+    face.seg = await mod.ImageSegmenter.createFromOptions(fs, { baseOptions: { modelAssetPath: base + 'selfie_segmenter.tflite', delegate: 'CPU' }, runningMode: 'VIDEO', outputConfidenceMasks: true, outputCategoryMask: false });
+    window.__pr.seg = 'ready'; return face.seg;
+  }).catch((e) => { window.__pr.seg = 'failed:' + (e && e.message); face.segLoading = null; throw e; });
+  return face.segLoading;
+}
+function segment(v) {
+  const now = performance.now();
+  if (!face.seg || now - (face.lastSeg || 0) < 90) return;
+  face.lastSeg = now;
+  try {
+    face.seg.segmentForVideo(v, now, (res) => {
+      const m = res.confidenceMasks && res.confidenceMasks[0]; if (!m) return;
+      const a = m.getAsFloat32Array(), w = m.width, h = m.height;
+      if (!face.mc) face.mc = document.createElement('canvas');
+      if (face.mc.width !== w || face.mc.height !== h) { face.mc.width = w; face.mc.height = h; }
+      const cx = face.mc.getContext('2d'), id = cx.createImageData(w, h), d = id.data;
+      for (let i = 0; i < a.length; i++) { const p = a[i]; d[i * 4 + 3] = Math.max(0, Math.min(255, Math.round(p * 255))); }
+      cx.putImageData(id, 0, 0); face.segAt = now; window.__pr.segSeen = true;
+    });
+  } catch (e) { window.__pr.segErr = String(e && e.message); }
+}
 function detect(v) {
   const now = performance.now();
   if (!face.lm || now - (face.lastDet || 0) < 100) return;
@@ -272,6 +300,15 @@ function faceDraw() {
   const p = face.preset;
   const pix = (n, smooth) => { down(n, Math.max(2, Math.round(n * h / w)), smooth); x.imageSmoothingEnabled = smooth; if (smooth) x.imageSmoothingQuality = 'high'; x.drawImage(t, 0, 0, w, h); };
   if (p === 'pixel') pix(24, false);
+  else if (p === 'bgblur') {
+    segment(v); pix(36, true);
+    if (face.mc && performance.now() - face.segAt < 1500) {
+      if (!face.pc) face.pc = document.createElement('canvas'); const pc = face.pc; if (pc.width !== w || pc.height !== h) { pc.width = w; pc.height = h; }
+      const px = pc.getContext('2d'); px.globalCompositeOperation = 'source-over'; px.clearRect(0, 0, w, h); px.drawImage(v, 0, 0, w, h);
+      px.globalCompositeOperation = 'destination-in'; px.imageSmoothingEnabled = true; px.drawImage(face.mc, 0, 0, w, h); px.globalCompositeOperation = 'source-over';
+      x.drawImage(pc, 0, 0);
+    }
+  }
   else if (p === 'avatar' || p === 'mask') {
     detect(v);
     if (p === 'avatar') { x.fillStyle = INK; x.fillRect(0, 0, w, h); } else pix(20, false);
@@ -301,10 +338,11 @@ function setFace(p) {
       face.track = face.cv.captureStream(15).getVideoTracks()[0];
     }
     face.preset = p; face.on = true; face.track.enabled = state.cam;
+    if (p === 'bgblur') { if (!face.seg) sysMsg('Loading background blur (about 13 MB, once). Until it is ready the whole picture is blurred, never your raw camera.'); segLoad().catch(() => { sysMsg('Background blur could not load. The whole picture stays blurred; pick another effect.'); }); }
     if (p === 'mask' || p === 'avatar') { if (!face.lm) sysMsg('Loading face tracking (about 17 MB, once). Until it is ready you see a blur, never your raw camera.'); mpLoad().catch(() => { sysMsg('Face tracking could not load here, so I switched you to Pixelate.'); if (face.preset === p) { if (sel) sel.value = 'pixel'; face.preset = 'pixel'; } }); }
     if (!face.timer) face.timer = setInterval(faceDraw, 66);
     faceDraw(); faceSwapTo(face.track); window.__pr.face = p;
-    sysMsg('Face effect on. It hides your face, not you: your voice, background and room can still identify you.');
+    sysMsg(p === 'bgblur' ? 'Background blur on. Your face stays visible; only what is behind you is blurred.' : 'Face effect on. It hides your face, not you: your voice, background and room can still identify you.');
   } catch (e) { face.on = false; face.preset = 'off'; clearInterval(face.timer); face.timer = null; if (sel) sel.value = 'off'; sysMsg('Face effects are not available in this browser.'); window.__pr.faceErr = String(e && e.message); }
 }
 // ---- voice disguise: processes only the outgoing mic, in this browser. Off by default. ----
@@ -427,6 +465,9 @@ function ready(c) {
   sysMsg(nameOf(c.__slot) + ' joined');
 }
 function markOk(c) { if (c.__ok) return; c.__ok = true; c.__okAt = Date.now(); send(c, 13, new Uint8Array(1)); ready(c); }
+// ---- theme: stored only as the words dark or light on this device ----
+function setTheme(t) { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('mut3d-theme', t); } catch (e) { /* private mode */ } const b = $('#theme'); if (b) b.textContent = t === 'light' ? 'Dark theme' : 'Light theme'; const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t === 'light' ? '#F5F8F2' : '#131A17'; window.__pr.theme = t; }
+(function () { let t = 'dark'; try { t = localStorage.getItem('mut3d-theme') || 'dark'; } catch (e) { /* ignore */ } document.documentElement.setAttribute('data-theme', t); const wire = () => { const b = $('#theme'); if (b) { b.textContent = t === 'light' ? 'Dark theme' : 'Light theme'; b.onclick = () => setTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'); } window.__pr.theme = t; }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire(); })();
 // ---- invite: share sheet, QR, optional short link ----
 // The room key lives after the # and never reaches a server. A short link keeps that true: the full link is encrypted in this browser
 // with a random 12-letter code that stays after the # of the short link, so our server only stores ciphertext for 24 hours.
