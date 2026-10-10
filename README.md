@@ -1,86 +1,72 @@
-# mut3d (working name)
+<p align="center"><img src="brand/icon.svg" width="96" alt="mut3d logo"></p>
 
-The repo is still called private-room.
+<h1 align="center">mut3d</h1>
+<p align="center"><b>Link-only calls and chat.</b><br>Private video calls and chat for up to 4 people. No account, no phone number, no app, nothing stored.</p>
+<p align="center"><a href="https://arbonomous-private-room.pages.dev"><b>Try it</b></a> &middot; <a href="https://arbonomous-private-room.pages.dev/about/">Landing page</a> &middot; <a href="docs/architecture.md">Architecture</a> &middot; <a href="docs/security-and-limits.md">Limits</a></p>
 
-Private video calls and chat in a link. For up to 4 people. No account, no phone number, no app to install, nothing stored.
+<p align="center">
+<img src="docs/img/home.png" width="190" alt="Home screen, dark">
+<img src="docs/img/home-light.png" width="190" alt="Home screen, light">
+<img src="docs/img/call.png" width="400" alt="Two people in a call">
+</p>
 
-Live: https://arbonomous-private-room.pages.dev
+> **Status:** a small, working side project by [arbonomous](https://github.com/arbonomous). The cryptography has **not been independently audited**. It is not a replacement for Signal or any audited tool. See [honest limits](#honest-limits).
 
-## What you get
-- Group video and voice, mute and camera toggles, screen share (desktop browsers)
-- Encrypted text chat
-- Encrypted file send (up to 25 MB, goes straight to the other people, never stored)
-- Host approval: by default people who open your link wait until you tap "Let in". Nothing (video, chat, files) flows to or from them until then.
-- Verify this call: both sides see the same 5 symbols; read them aloud to confirm nobody is intercepting the call between your two devices.
-- End room for everyone: wipes chat and files from every open tab and closes all connections. Optional auto-close timer (1, 4 or 24 hours).
-- Join by link, with an optional name. Works in current Chrome, Edge, Firefox and Safari.
+## What it does
+- Start a call, get a link, send it. Guests knock and the host taps **Let in**.
+- Group video and voice, chat, and file send (up to 25 MB) in the browser.
+- The room key lives after the `#` of the link, so it never reaches a server.
+- Nothing about a call is stored. Close the tab and it is gone.
+- Extras: invite QR and share sheet, optional short link, room lock and waiting list, voice and face disguise (blur, pixelate, mask, avatar, background blur), light and dark theme, installable on phones.
+
+Details for each feature are in [docs/features.md](docs/features.md).
 
 ## How it works
-- Start a call and you get a link. The secret key is the part after the `#`. Browsers never send that part to any server.
-- Video and voice go browser to browser over WebRTC (built-in DTLS-SRTP encryption). Chat, names and files go over WebRTC data channels, additionally sealed with AES-GCM using the key from the link. Each message is bound to its type, sender and recipient.
-- Admission: when two browsers connect, each sends the other a fresh random challenge sealed with the room key. Nothing is shared and no media flows until the other side returns it correctly. Someone who guesses the room id but lacks the key gets nothing.
-- A free public PeerJS broker (0.peerjs.com) introduces browsers to each other, and Google/Twilio free STUN servers help with NAT. They never see the key or your content. They do see that a connection is being made, and IP addresses (as with any WebRTC call).
-- Nothing is stored anywhere. Close the tab and it is gone. The "Privacy check" panel in the call shows what was sent to the introduction server.
+```mermaid
+flowchart LR
+  A[Browser A] <-- "WebRTC media + sealed data" --> B[Browser B]
+  A -. "offers only" .-> P[(PeerJS broker)]
+  B -. "offers only" .-> P
+  A -- "fallback only" --> T[Relay]
+```
+Video and voice go browser to browser over WebRTC. Chat, names and files are also sealed with AES-GCM using the key from the link, and each peer must pass a fresh challenge sealed with that key before anything flows. A small Cloudflare Pages Function hands out relay credentials, takes optional feedback and stores short-link ciphertext. Full write-up: [docs/architecture.md](docs/architecture.md).
+
+## Tech
+Vanilla JavaScript bundled with esbuild into one HTML file &middot; WebRTC + PeerJS &middot; Web Crypto (AES-GCM) &middot; MediaPipe Tasks Vision for face and background effects &middot; Cloudflare Pages, Functions and D1 &middot; Playwright tests with real headless browsers.
 
 ## Honest limits
-- Host approval, the burn button and the auto-close timer are enforced by each person's browser running this code. They protect against people without the link and honest clients. Someone with the link who runs modified code could ignore them, and anyone can screenshot or record.
-- "Verify this call" detects someone intercepting the call between two devices. It does not prove who the person is.
-- The host's signing key lives in the host's own address bar (the part after the #, not in the invite link). If the host refreshes, the page keeps working; if the host loses that tab's address they lose host rights.
-- The cryptography here has **not been independently audited**. This is a small project, not a replacement for Signal or any audited tool. Do not use it where your safety depends on it.
-- Anyone who has the full link can join, and can see and hear the call. Share the link only with people you trust, over a channel you trust. There is no user identity beyond the name people type.
-- Peers connect directly, so people in the call can see each other's IP addresses. A small free relay (TURN, from metered.ca) is used only as a fallback when a direct connection fails. The relay passes encrypted media and chat, so it sees IP addresses and timing but not content. It is a small free tier (500 MB, shared, no guarantee), so a very strict network may still fail to connect.
-- Up to 4 people. Screen share is not available on most phones.
-- If someone's device is compromised, or they screenshot or record the call, no tool can stop that.
+- **Not independently audited.** Do not use it where your safety depends on it.
+- Anyone with the full link can knock. Share it only over a channel you trust.
+- Host approval, lock and end-room are enforced in each person's browser. Modified code could ignore them, and anyone can screenshot or record.
+- People in a call can see each other's IP addresses. A small free relay is a fallback and may run out.
+- Up to 4 people. Tested in headless browsers, not yet on real phones (share sheet, QR scanning, cutout speed on older iPhones).
+
+The complete list is in [docs/security-and-limits.md](docs/security-and-limits.md).
+
+## Repository layout
+```
+src/          the app (call.js, call.html, audit.js)
+_worker.js    Cloudflare Pages Function: /turn, /fb, /s
+public/       manifest, service worker, icons, landing page, model files
+brand/        logo set and brand notes
+tests/        Playwright tests
+docs/         architecture, features, security, testing
+parked/       earlier coding and AI version, kept for reference, not built
+build.mjs     builds dist/index.html
+icons-gen.mjs, fetch-mediapipe.sh, mp.sha256   icon and model-file helpers
+```
 
 ## Run it
 ```
 npm install
-node build.mjs        # makes dist/index.html, one self-contained file
-node call-test.mjs    # two or three headless browsers: video, chat, mute, file, screen share, rejoin
-node approve-test.mjs # host approval, impostor host, verify codes, burn, expiry
-node neg.mjs          # outsider without the key gets nothing
-node reflect.mjs      # replayed/reflected admission messages are rejected
+./fetch-mediapipe.sh   # face and background model files (pinned, SHA-256 checked)
+npm run build                  # writes dist/index.html
+npm test                       # headless browser test suite
 ```
-Deploy `dist/index.html` to any static host.
-
-## Parked
-An earlier version added a shared code editor, local AI and a game preview. That code (`src/main.js`, `src/index.html`, and friends) is still in the repo but is not built or shown. The app is now one thing: private calls and chat.
+Deploy `dist/index.html` plus `_worker.js` and `public/` as a Cloudflare Pages project. The app name is one constant, `APP_NAME` in `src/call.js`.
 
 ## Feedback
+Use **Send feedback** in the app. You see the exact text before it is sent, and it never includes your room link, names or chat.
 
-"Send feedback" (home screen and More menu) sends one short note to the builders. The sheet shows the exact text before you tap Send. It contains only: worked / didn't work, your note, and, only if you tick the box, the app version, browser string and screen size. It never includes the room link or key, names, chat, files or anything about a call. Your network address is used only to limit spam (a salted hash kept for under an hour) and is not stored with the feedback. Notes are deleted after 60 days. Storage is a free Cloudflare D1 table written by `_worker.js`.
-
-## Voice disguise
-
-More menu > Voice disguise: Off (default), Deeper, Higher, Robot. It runs in your own browser on your microphone before the audio is sent, so the others hear the changed voice. It is a disguise, not anonymity: people can still recognise you by what you say and how you talk. "Hear myself" is off by default (use headphones, or you get echo). If the browser blocks audio processing, the call carries on with your normal voice. Effects use some battery on phones.
-
-
-## Connection fallback
-
-`/turn` (a Cloudflare Pages Function) hands the browser short-lived relay credentials (30 minutes). The long-lived secret stays on the server. The endpoint only answers same-site requests and is rate limited. The browser tries a direct path first and uses the relay only if that fails. `relay-test.mjs` forces relay-only and sends data through it.
-
-## Face disguise
-
-More menu > Face disguise: Off (default, the untouched camera), Blur, Pixelate, Mask, Avatar. Everything runs in your own browser on your camera before anything is sent. Nothing is uploaded.
-
-- Blur and Pixelate cover the whole picture.
-- Mask and Avatar follow your face using Google's MediaPipe Face Landmarker, served from this site (`/mp/`), not a third-party CDN. The mask is drawn over a pixelated picture. The avatar replaces the whole picture with a cartoon face that follows your head, blinks and opens its mouth when you do. The files are about 17 MB and load only when you pick one of these. Until they are ready, you see a blur, never your raw camera. Face finding runs about 10 times a second on the CPU to save battery; drawing is capped at 15 fps and 480 px wide.
-- It is a disguise, not anonymity: your voice, background and room can still identify you. If the browser can't capture a canvas or the files can't load, you get a chat note and a fallback.
-
-Licenses: `@mediapipe/tasks-vision` 1.1.0 is Apache-2.0 (checked in its package.json). The `face_landmarker.task` model is published by Google alongside it; its model card license was not independently verified here. The big files are not committed: run `./fetch-mediapipe.sh` (pinned version, SHA-256 checked) before deploying. Tests: `face-test.mjs`; `face-real-test.mjs` runs a real face photo through the avatar and mask (needs `/tmp/face.y4m`).
-
-## Speaker highlight, enlarge, install
-
-The person who is talking gets a green outline (measured from the audio you already receive, in your browser). Tap a tile to enlarge it, tap again to go back. On phones, "Add to Home Screen" installs mut3d as an app. The service worker (`public/sw.js`) keeps only the app page and the face-tracking files so it opens offline. It never stores chat, files, feedback, relay credentials or room keys (the key is after the # in the link and is never part of a request).
-
-## Invite, short link, room lock
-- **Invite** button: shows a QR code of the link, a Share button (phones that support the share sheet), and Copy. The QR is drawn in the browser with the MIT-licensed `qrcode-generator`; nothing is fetched.
-- **Short link** (optional, one tap): the full link is encrypted in your browser with a random 12-letter code. Our server stores only that ciphertext for 24 hours (D1, rate limited). The code lives after the `#` of the short link, so the server never sees the room key or the code. Anyone holding the short link can still join (same trust as the long link). Wrong code or expired: the page says so.
-- **Lock room** (host, in More): refuses new knocks and clears the waiting list; guests already in stay. Enforced on the host's device. Unlock to accept knocks again.
-- **Waiting list**: each person waiting has Let in / Deny; with two or more, "Let everyone in" and "Deny all" appear.
-- Honest limit: lock and the waiting list live in the host's browser. If the host closes the tab, nobody is admitted.
-
-## Theme and background blur (v11)
-- **Theme**: Light/Dark button in More. Default is dark. The only thing stored on your device is the word `dark` or `light`.
-- **Blur background only**: new option in the face-effect list. A small person-cutout model (MediaPipe selfie segmenter, about 250 KB, run in your browser, served from our own origin) keeps you sharp and blurs what is behind you. It does NOT hide your face. Until the model loads, the whole picture is blurred, never the raw camera. The model's licence was not independently verified (same status as the face model).
-- Not yet tested on real phones: speed of the cutout on older iPhones. If it lags, use Blur or Pixelate.
+## Credits
+[PeerJS](https://peerjs.com), [MediaPipe](https://ai.google.dev/edge/mediapipe), [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), [metered.ca](https://www.metered.ca) (free relay tier), Cloudflare Pages.
